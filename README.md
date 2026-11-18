@@ -2,7 +2,7 @@
 
 Rewrites each prompt you send into a clearer, more specific and more complete one, using a fast model, before the assistant reads it.
 
-The rewritten prompt follows four parts: goal, context, constraints and expected result. It keeps your language and intent and never invents facts, files or requirements. If the rewrite fails or takes too long, your original prompt is sent as typed.
+The rewritten prompt follows four parts: goal, context, constraints and expected result. It is written in the Language set in `/config` (for example `pt-BR`), with correct accents, or in your draft's language when none is set. It keeps your intent and never invents facts, files or requirements. If the rewrite fails or takes too long, your original prompt is sent as typed.
 
 ## Use
 

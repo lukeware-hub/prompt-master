@@ -12,12 +12,15 @@ const FOOTER = { plugin: 'prompt-master', component: 'SessionMode', props: { mod
 const USAGE = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
 
 // Stands for the engine: records what reached it and what the model was asked.
-function engine(on: On, reply = 'Goal: fix the login bug in auth.ts.') {
+function engine(on: On, reply = 'Goal: fix the login bug in auth.ts.', settings: Record<string, unknown> = {}) {
   const sent: string[] = []
   const asked: string[] = []
+  const systems: string[] = []
+  on('settings.read', () => ({ value: settings }))
   on('prompt.submit', (_, e) => (sent.push(e.text), { text: e.text }))
   on('model.complete', (_, e) => {
     asked.push(e.prompt)
+    systems.push(e.system ?? '')
     const value: ModelCompleteResult = reply
       ? { isAnswered: true, text: reply, usage: USAGE }
       : { isAnswered: false, reason: 'aborted', usage: USAGE }
@@ -25,7 +28,7 @@ function engine(on: On, reply = 'Goal: fix the login bug in auth.ts.') {
   })
   on('command.register', (_, e) => ({ value: { command: e.name } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  return { sent, asked }
+  return { sent, asked, systems }
 }
 
 test('a short draft is rewritten from inside draft tags', async ($, on) => {
@@ -89,4 +92,20 @@ test('the footer keeps what is drawn beneath and adds the toggle', async ($, on)
     expect(await ui.find({ type: 'Button', key: 'toggle' })).toBeDefined()
     await ui.unmount()
   }
+})
+
+test('the rewrite is written in the Language set in /config', async ($, on) => {
+  const { systems } = engine(on, undefined, { language: 'pt-BR' })
+
+  await $.prompt.submit(PROMPT)
+
+  expect(systems[0]).toContain('Write the final prompt in the language "pt-BR", even when the draft is written in another language')
+})
+
+test('with no Language set the rewrite keeps the draft language', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(systems[0]).toContain("Write the final prompt in the draft's own language")
 })
