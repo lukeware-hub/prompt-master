@@ -1,5 +1,5 @@
 {
   "name": "prompt-master",
-  "owner": { "name": "diego-dm-morais" },
+  "owner": { "name": "lukeware-hub" },
   "plugins": [{ "name": "prompt-master", "source": "./" }]
 }

@@ -17,7 +17,7 @@ You need Claude Code installed.
 **In the Claude Code terminal**, type at the prompt:
 
 ```
-/plugin install prompt-master --marketplace diego-dm-morais/prompt-master
+/plugin install prompt-master --marketplace lukeware-hub/prompt-master
 ```
 
 1. Answer `y` to add the marketplace.
@@ -27,10 +27,10 @@ You need Claude Code installed.
 **From a shell**, the same in one line:
 
 ```
-claude plugin install prompt-master --marketplace diego-dm-morais/prompt-master
+claude plugin install prompt-master --marketplace lukeware-hub/prompt-master
 ```
 
-**In the Claude desktop app**: click **+** next to the prompt box, then **Plugins**, **Add marketplace**, type `diego-dm-morais/prompt-master`, then **Add plugin**.
+**In the Claude desktop app**: click **+** next to the prompt box, then **Plugins**, **Add marketplace**, type `lukeware-hub/prompt-master`, then **Add plugin**.
 
 ## Uninstall
 
