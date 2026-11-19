@@ -252,3 +252,30 @@ test('the rewrite adds no facts from the session that the draft does not give', 
   expect(systems[0]).toContain('Output: Goal: add a test for the expired token case.')
   expect(systems[0]).toContain('Not: Context: auth.ts changed, 12 tests pass, version 0.4.2 is ready.')
 })
+
+const SESSION = [said('assistant', 'I installed version 0.6.0 here. It only works after a restart. The installed copy already has the fix.')]
+
+test('a rewrite that repeats sentences from the session is dropped and the draft is sent as typed', async ($, on) => {
+  const { sent } = engine(on, 'Goal: test it. Context: the installed copy already has the fix and only works after a restart.', {}, SESSION)
+
+  await $.prompt.submit({ ...PROMPT, text: 'restarted, test if it works' })
+
+  expect(sent).toEqual(['restarted, test if it works'])
+})
+
+test('a rewrite that only names the subject from the session is kept', async ($, on) => {
+  const { sent } = engine(on, 'I restarted. Test if version 0.6.0 works now.', {}, SESSION)
+
+  await $.prompt.submit({ ...PROMPT, text: 'restarted, test if it works' })
+
+  expect(sent).toEqual(['I restarted. Test if version 0.6.0 works now.'])
+})
+
+test('a short answer rewritten by repeating the question is sent as typed', async ($, on) => {
+  const question = [said('assistant', 'Should I make version 0.6.1 that adds one test for each rule? Do it now?')]
+  const { sent } = engine(on, 'Yes, make version 0.6.1 that adds one test for each rule now.', {}, question)
+
+  await $.prompt.submit({ ...PROMPT, text: 'yes do it, go on' })
+
+  expect(sent).toEqual(['yes do it, go on'])
+})

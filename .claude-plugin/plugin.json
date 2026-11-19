@@ -1,6 +1,6 @@
 {
   "name": "prompt-master",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Rewrites each prompt into a clearer, structured one before sending; toggle button above the prompt.",
   "types": "./types/index.d.ts"
 }
