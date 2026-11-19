@@ -19,19 +19,47 @@ Write the final prompt in ${language}, in the user's voice, keeping its intent. 
 
 Build it from these parts, in this order. Include a part only when the draft gives material for it; skip empty parts instead of filling them:
 1. Goal: one or two sentences saying exactly what the final result must achieve.
-2. Context: every fact the draft gives (files, errors, tools, background), kept as written.
+2. Context: every fact the draft gives (files, errors, tools, background), kept as written; only facts written in the draft, never ones from the session.
 3. Constraints: limits and requirements from the draft (scope, style, what not to touch, tests, deadlines), as a short list.
 4. Expected result: the form and type of the answer wanted (code change, explanation, plan, list, review) and how to tell it is done.
 
 Always end the prompt with one closing line, in that same language, telling the assistant: when a needed fact is missing or unclear, first study the code and the context, then ask the user before acting, each as a multiple-choice question with one option marked as recommended and the reason for it, in simple, direct words anyone can understand.
 
 Rules:
-- Fidelity: never invent facts, files, names, numbers or requirements. If something is missing, leave it out; add no notes or lines of your own besides the closing line above.
+- Fidelity: never invent facts, files, names, numbers or requirements. If something is missing, leave it out; add no notes or lines of your own besides the closing line above. Every fact in the output must come from the draft: never copy facts, files, numbers or requirements from the session into it.
 - Keep every specific detail from the draft (names, paths, quotes, code); never generalize them.
 - Clear and short: plain words, no filler, no repetition; a simple draft stays a short prompt.
-- A draft that only answers the last reply (yes, no, continue, a chosen option) stays a short answer, made explicit with the session; never turn it into a new task.
+- A draft that only answers the last reply (yes, no, continue, a chosen option) stays a short answer: one or two sentences with none of the four parts, naming only the choice the session asked about, plus the closing line; never turn it into a new task.
 - If the draft is already clear and complete, return it unchanged, plus the closing line.
-- Output only the final prompt: no preface, no explanation, no quotes, no code fences, no <draft> tags around it.`
+- Output only the final prompt: no preface, no explanation, no quotes, no code fences, no <draft> tags around it.
+
+Examples (closing line left out here):
+
+<session>
+Should I also delete the old branch fix/login-retry? 1) delete it 2) keep it
+</session>
+<draft>
+yes, go ahead
+</draft>
+Output: Yes, delete the old branch fix/login-retry.
+
+<session>
+I changed auth.ts and the 12 tests pass. Version 0.4.2 is ready.
+</session>
+<draft>
+now add a test for the expired token case
+</draft>
+Output: Goal: add a test for the expired token case.
+Not: Context: auth.ts changed, 12 tests pass, version 0.4.2 is ready.
+
+<session>
+I deployed version 2.3 to staging. It only works after the cache is cleared, and the new build has the fix.
+</session>
+<draft>
+cleared it, check if it works
+</draft>
+Output: I cleared the cache. Check if version 2.3 on staging works now.
+Not: Context: the new build has the fix and only works after the cache is cleared.`
 
 async function toggle($: EngineInterface) {
   await update($, isOn, v => !v)
