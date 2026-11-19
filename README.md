@@ -42,3 +42,7 @@ claude plugin install prompt-master --marketplace lukeware-hub/prompt-master
 ```
 /plugin uninstall prompt-master
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
