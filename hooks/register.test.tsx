@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'claude-code/testing'
-import type { Args, ModelCompleteResult, On } from 'claude-code'
+import type { Args, ModelCompleteResult, On, SessionMessage } from 'claude-code'
 
 const PROMPT = {
   text: 'fix the login bug in auth.ts',
@@ -23,13 +23,19 @@ const run = (command: string, args: string) =>
 const USAGE = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
 
 // Stands for the engine: records what reached it and what the model was asked.
-function engine(on: On, reply = 'Goal: fix the login bug in auth.ts.', settings: Record<string, unknown> = {}) {
+function engine(
+  on: On,
+  reply = 'Goal: fix the login bug in auth.ts.',
+  settings: Record<string, unknown> = {},
+  messages: SessionMessage[] = [],
+) {
   const sent: string[] = []
   const asked: string[] = []
   const systems: string[] = []
   const ran: string[] = []
   on('settings.read', () => ({ value: settings }))
   on('command.list', () => ({ value: COMMANDS }))
+  on('session.messages', () => ({ value: messages }))
   on('command.run', (_, e) => (ran.push(e.args), { text: '' }))
   on('prompt.submit', (_, e) => (sent.push(e.text), { text: e.text }))
   on('model.complete', (_, e) => {
@@ -180,4 +186,47 @@ test('a failed rewrite runs the skill command as typed', async ($, on) => {
   await $.command.run(run('impeccable', SKILL_ARGS))
 
   expect(ran).toEqual([SKILL_ARGS])
+})
+
+const said = (role: SessionMessage['role'], text: string): SessionMessage => ({ role, text, toolUses: [] })
+
+test('the end of the last assistant reply is sent as session context', async ($, on) => {
+  const reply = 'a'.repeat(600) + ' Next step: fix the token check in auth.ts?'
+  const { asked } = engine(on, undefined, {}, [
+    said('assistant', 'old reply about the footer'),
+    said('user', 'my earlier question about the footer'),
+    said('assistant', reply),
+  ])
+
+  await $.prompt.submit({ ...PROMPT, text: 'sim, pode continuar' })
+
+  expect(asked[0]).toBe(`<session>\n${reply.slice(-500)}\n</session>\n<draft>\nsim, pode continuar\n</draft>`)
+})
+
+test('user messages never reach the session context', async ($, on) => {
+  const { asked } = engine(on, undefined, {}, [said('assistant', 'Done.'), said('user', 'secret user text')])
+
+  await $.prompt.submit(PROMPT)
+
+  expect(asked[0]).toContain('<session>\nDone.\n</session>')
+  expect(asked[0]).not.toContain('secret user text')
+})
+
+test('with no assistant reply only the draft is sent', async ($, on) => {
+  const { sent, asked } = engine(on)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(asked[0]).toBe('<draft>\nfix the login bug in auth.ts\n</draft>')
+  expect(sent).toEqual(['Goal: fix the login bug in auth.ts.'])
+})
+
+test('the session context may only clarify the draft, never add facts', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(systems[0]).toContain('<session>')
+  expect(systems[0]).toContain('never add goals, facts, files or requirements from it')
+  expect(systems[0]).toContain('never turn it into a new task')
 })
