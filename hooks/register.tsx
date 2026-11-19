@@ -60,24 +60,51 @@ async function rewrite($: EngineInterface, text: string) {
   }
 }
 
+// The rewrite, or '' when the plugin is off or the text is too short or too long.
+async function improve($: EngineInterface, text: string) {
+  const length = text.trim().length
+  if (!(await read($, isOn)) || length < 12) {
+    return ''
+  }
+  if (length > MAX_CHARS) {
+    $.ui.toast(`Prompt Master: prompts over ${MAX_CHARS} characters are sent as typed`)
+    return ''
+  }
+  return rewrite($, text)
+}
+
+// Skills and plugin commands take a prompt; built-in commands take settings and paths.
+async function isRewritable($: EngineInterface, command: string) {
+  const info = (await $.command.list()).find(c => c.name === command)
+  return info !== undefined && info.source !== 'builtin'
+}
+
 export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
-    const text = e.text.trim()
-    const isSkipped =
-      !(await read($, isOn)) || e.command || e.isMeta || e.origin.kind !== 'composer' || text.length < 12
-
-    if (isSkipped) {
-      return next(e)
-    }
-
-    if (text.length > MAX_CHARS) {
-      $.ui.toast(`Prompt Master: prompts over ${MAX_CHARS} characters are sent as typed`)
+    // A command's text is rewritten at command.run, where its arguments can still change.
+    if (e.command || e.isMeta || e.origin.kind !== 'composer') {
       return next(e)
     }
 
     // On any failure, send the original prompt untouched.
-    const better = await rewrite($, e.text)
+    const better = await improve($, e.text)
     return next(better ? { ...e, text: better } : e)
+  }).catch(($, e, next) => next(e))
+
+  // Text after a skill or plugin command, below its own leading command lines.
+  on('command.run', async ($, e, next) => {
+    if (e.command === 'prompt-master' || e.origin.kind !== 'composer' || !(await isRewritable($, e.command))) {
+      return next(e)
+    }
+
+    const lines = e.args.split('\n')
+    const firstText = lines.findIndex(line => !line.trimStart().startsWith('/'))
+    if (firstText < 0) {
+      return next(e)
+    }
+
+    const better = await improve($, lines.slice(firstText).join('\n'))
+    return next(better ? { ...e, args: [...lines.slice(0, firstText), better].join('\n') } : e)
   }).catch(($, e, next) => next(e))
 
   on('session.start', async ($, e, next) => {
