@@ -230,3 +230,25 @@ test('the session context may only clarify the draft, never add facts', async ($
   expect(systems[0]).toContain('never add goals, facts, files or requirements from it')
   expect(systems[0]).toContain('never turn it into a new task')
 })
+
+test('a short answer to the last reply stays a short, explicit answer', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(systems[0]).toContain('one or two sentences with none of the four parts')
+  expect(systems[0]).toContain('<draft>\nyes, go ahead\n</draft>')
+  expect(systems[0]).toContain('Output: Yes, delete the old branch fix/login-retry.')
+})
+
+test('the rewrite adds no facts from the session that the draft does not give', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(systems[0]).toContain('never copy facts, files, numbers or requirements from the session')
+  expect(systems[0]).toContain('only facts written in the draft, never ones from the session')
+  expect(systems[0]).toContain('<draft>\nnow add a test for the expired token case\n</draft>')
+  expect(systems[0]).toContain('Output: Goal: add a test for the expired token case.')
+  expect(systems[0]).toContain('Not: Context: auth.ts changed, 12 tests pass, version 0.4.2 is ready.')
+})
