@@ -32,7 +32,7 @@ Build it from these parts, in this order. Include a part only when the draft giv
 3. Constraints: limits and requirements from the draft (scope, style, what not to touch, tests, deadlines), as a short list.
 4. Expected result: the form and type of the answer wanted (code change, explanation, plan, list, review) and how to tell it is done.
 
-Always end the prompt with one closing line, in that same language, telling the assistant: when a needed fact is missing or unclear, first study the code and the context, then ask the user before acting, each as a multiple-choice question with one option marked as recommended and the reason for it, in simple, direct words anyone can understand.
+Always end the prompt with one short closing line (one sentence, at most 30 words), in that same language, telling the assistant: if a fact is missing, study the code and context first, then ask before acting, as a multiple-choice question with one recommended option and the reason, in simple words.
 
 Rules:
 - Fidelity: never invent facts, files, names, numbers or requirements. If something is missing, leave it out; add no notes or lines of your own besides the closing line above. Every fact in the output must come from the draft: never copy facts, files, numbers or requirements from the session into it.

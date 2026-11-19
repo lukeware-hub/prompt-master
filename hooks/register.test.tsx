@@ -259,6 +259,7 @@ test('the rewrite ends by asking for missing facts as multiple choice with a rec
 
   expect(systems[0]).toContain('multiple-choice question')
   expect(systems[0]).toContain('recommended')
+  expect(systems[0]).toContain('one short closing line (one sentence, at most 30 words)')
   expect(systems[0]).not.toContain('never add questions')
 })
 
