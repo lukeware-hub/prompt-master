@@ -199,7 +199,7 @@ export const register: Register = on => {
       <Box>
         {await next(e)}
         <Button
-          key="toggle"
+          key="prompt-master-toggle"
           label={active ? '✦ Prompt Master: on' : '✦ Prompt Master: off'}
           variant={active ? 'primary' : 'secondary'}
           onPress={() => toggle($)}

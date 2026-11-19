@@ -109,9 +109,30 @@ test('the footer keeps what is drawn beneath and adds the toggle', async ($, on)
     const ui = await $.ui.mount({ ...FOOTER, surface })
 
     expect((await ui.find({ type: 'Text', text: /engine/ }))?.text).toBe('engine')
-    expect(await ui.find({ type: 'Button', key: 'toggle' })).toBeDefined()
+    expect(await ui.find({ type: 'Button', key: 'prompt-master-toggle' })).toBeDefined()
     await ui.unmount()
   }
+})
+
+// Another mod's footer Button keyed "toggle" took this one's clicks.
+test('the footer toggle has a key no other mod uses, and a press turns it off and on', async ($, on) => {
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine</Text>
+  })
+  on('store.set', () => ({ value: undefined }))
+  const { sent } = engine(on)
+  const ui = await $.ui.mount({ ...FOOTER, surface: 'terminal' })
+  const label = async () => (await ui.find({ type: 'Button', key: 'prompt-master-toggle' }))?.props.label
+
+  expect(await ui.find({ type: 'Button', key: 'toggle' })).toBeUndefined()
+  await ui.press({ key: 'prompt-master-toggle' })
+  expect(await label()).toBe('✦ Prompt Master: off')
+  await $.prompt.submit(PROMPT)
+  expect(sent).toEqual([PROMPT.text])
+  await ui.press({ key: 'prompt-master-toggle' })
+  expect(await label()).toBe('✦ Prompt Master: on')
+  await ui.unmount()
 })
 
 test('the rewrite is written in the Language set in /config', async ($, on) => {
