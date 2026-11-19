@@ -13,7 +13,10 @@ const tokenCap = (length: number) => Math.min(MAX_TOKENS, BASE_TOKENS + Math.cei
 const timeLimit = (length: number) => Math.min(MAX_TIMEOUT_MS, BASE_TIMEOUT_MS + length * 10)
 
 // How much of the last assistant reply the model sees to understand the draft.
-const CONTEXT_CHARS = 500
+// Tokens are estimated at about 4 characters each, so 2000 tokens is about 8000 characters.
+const CONTEXT_TOKENS = 2000
+const CHARS_PER_TOKEN = 4
+const CONTEXT_CHARS = CONTEXT_TOKENS * CHARS_PER_TOKEN
 
 // A rewrite with this many three-word runs taken from the session copied it.
 const COPY_LIMIT = 3

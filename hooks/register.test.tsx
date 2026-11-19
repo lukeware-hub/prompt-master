@@ -314,7 +314,7 @@ test('a failed rewrite runs the skill command as typed', async ($, on) => {
 const said = (role: SessionMessage['role'], text: string): SessionMessage => ({ role, text, toolUses: [] })
 
 test('the end of the last assistant reply is sent as session context', async ($, on) => {
-  const reply = 'a'.repeat(600) + ' Next step: fix the token check in auth.ts?'
+  const reply = 'a'.repeat(9000) + ' Next step: fix the token check in auth.ts?'
   const { asked } = engine(on, undefined, {}, [
     said('assistant', 'old reply about the footer'),
     said('user', 'my earlier question about the footer'),
@@ -323,7 +323,7 @@ test('the end of the last assistant reply is sent as session context', async ($,
 
   await $.prompt.submit({ ...PROMPT, text: 'sim, pode continuar' })
 
-  expect(asked[0]).toBe(`<session>\n${reply.slice(-500)}\n</session>\n<draft>\nsim, pode continuar\n</draft>`)
+  expect(asked[0]).toBe(`<session>\n${reply.slice(-8000)}\n</session>\n<draft>\nsim, pode continuar\n</draft>`)
 })
 
 test('user messages never reach the session context', async ($, on) => {
