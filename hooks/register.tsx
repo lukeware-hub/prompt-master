@@ -3,8 +3,14 @@ import type { EngineInterface, Register } from 'claude-code'
 
 const isOn = atom({ plugin: 'prompt-master', key: 'isOn' } as const, true)
 
-// Longer drafts are sent as typed: their rewrite could pass maxTokens and arrive cut.
-const MAX_CHARS = 4000
+// The reply's token cap and time limit grow with the draft, so a long draft is rewritten whole.
+const BASE_TOKENS = 2000
+const MAX_TOKENS = 64000
+const BASE_TIMEOUT_MS = 15000
+const MAX_TIMEOUT_MS = 300000
+
+const tokenCap = (length: number) => Math.min(MAX_TOKENS, BASE_TOKENS + Math.ceil(length / 2))
+const timeLimit = (length: number) => Math.min(MAX_TIMEOUT_MS, BASE_TIMEOUT_MS + length * 10)
 
 // How much of the last assistant reply the model sees to understand the draft.
 const CONTEXT_CHARS = 500
@@ -111,14 +117,20 @@ async function rewrite($: EngineInterface, text: string) {
   $.ui.status('✦ Prompt Master: rewriting…')
   try {
     const context = await lastReply($)
+    const maxTokens = tokenCap(text.length)
     const r = await $.model.complete({
       model: 'haiku',
       system: system(await outputLanguage($)),
       prompt: `${context ? `<session>\n${context}\n</session>\n` : ''}<draft>\n${text}\n</draft>`,
-      maxTokens: 2000,
+      maxTokens,
       effort: 'low',
-      timeoutMs: 15000,
+      timeoutMs: timeLimit(text.length),
     })
+    // A reply that used every token it was allowed was cut short.
+    if (r.isAnswered && r.usage.output_tokens >= maxTokens) {
+      $.ui.toast('Prompt Master: the rewrite was cut short, so the prompt was sent as typed')
+      return ''
+    }
     const better = r.isAnswered ? r.text.trim() : ''
     if (better && copiesSession(better, context, text)) {
       $.ui.toast('Prompt Master: the rewrite repeated the conversation, so the prompt was sent as typed')
@@ -130,14 +142,9 @@ async function rewrite($: EngineInterface, text: string) {
   }
 }
 
-// The rewrite, or '' when the plugin is off or the text is too short or too long.
+// The rewrite of any text, short or long; '' when the plugin is off or there is no text.
 async function improve($: EngineInterface, text: string) {
-  const length = text.trim().length
-  if (!(await read($, isOn)) || length < 12) {
-    return ''
-  }
-  if (length > MAX_CHARS) {
-    $.ui.toast(`Prompt Master: prompts over ${MAX_CHARS} characters are sent as typed`)
+  if (!(await read($, isOn)) || !text.trim()) {
     return ''
   }
   return rewrite($, text)

@@ -28,11 +28,13 @@ function engine(
   reply = 'Goal: fix the login bug in auth.ts.',
   settings: Record<string, unknown> = {},
   messages: SessionMessage[] = [],
+  isCut = false,
 ) {
   const sent: string[] = []
   const asked: string[] = []
   const systems: string[] = []
   const ran: string[] = []
+  const limits: { maxTokens?: number; timeoutMs?: number }[] = []
   on('settings.read', () => ({ value: settings }))
   on('command.list', () => ({ value: COMMANDS }))
   on('session.messages', () => ({ value: messages }))
@@ -41,14 +43,16 @@ function engine(
   on('model.complete', (_, e) => {
     asked.push(e.prompt)
     systems.push(e.system ?? '')
+    limits.push({ maxTokens: e.maxTokens, timeoutMs: e.timeoutMs })
+    const usage = isCut ? { ...USAGE, output_tokens: e.maxTokens ?? 1024 } : USAGE
     const value: ModelCompleteResult = reply
-      ? { isAnswered: true, text: reply, usage: USAGE }
+      ? { isAnswered: true, text: reply, usage }
       : { isAnswered: false, reason: 'aborted', usage: USAGE }
     return { value }
   })
   on('command.register', (_, e) => ({ value: { command: e.name } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  return { sent, asked, systems, ran }
+  return { sent, asked, systems, ran, limits }
 }
 
 test('a short draft is rewritten from inside draft tags', async ($, on) => {
@@ -68,14 +72,50 @@ test('a failed rewrite sends the draft as typed', async ($, on) => {
   expect(sent).toEqual([PROMPT.text])
 })
 
-test('a draft over 4000 characters is sent as typed without asking the model', async ($, on) => {
+test('a one-word draft is rewritten', async ($, on) => {
   const { sent, asked } = engine(on)
-  const long = 'x'.repeat(4001)
 
+  await $.prompt.submit({ ...PROMPT, text: 'ok' })
+
+  expect(asked).toHaveLength(1)
+  expect(sent).toEqual(['Goal: fix the login bug in auth.ts.'])
+})
+
+test('a draft of only spaces is sent as typed without asking the model', async ($, on) => {
+  const { sent, asked } = engine(on)
+
+  await $.prompt.submit({ ...PROMPT, text: '   ' })
+
+  expect(asked).toEqual([])
+  expect(sent).toEqual(['   '])
+})
+
+test('a long draft is rewritten with a token cap and time limit that grow with it', async ($, on) => {
+  const { sent, limits } = engine(on)
+  const long = 'x'.repeat(20000)
+
+  await $.prompt.submit(PROMPT)
   await $.prompt.submit({ ...PROMPT, text: long })
 
-  expect(sent).toEqual([long])
-  expect(asked).toEqual([])
+  expect(sent).toEqual(['Goal: fix the login bug in auth.ts.', 'Goal: fix the login bug in auth.ts.'])
+  expect(limits[0]).toEqual({ maxTokens: 2014, timeoutMs: 15280 })
+  expect(limits[1]).toEqual({ maxTokens: 12000, timeoutMs: 215000 })
+})
+
+test('a huge draft keeps the token cap and time limit within the model limits', async ($, on) => {
+  const { limits } = engine(on)
+
+  await $.prompt.submit({ ...PROMPT, text: 'x'.repeat(500000) })
+
+  expect(limits[0]).toEqual({ maxTokens: 64000, timeoutMs: 300000 })
+})
+
+test('a rewrite cut short at its token cap sends the draft as typed', async ($, on) => {
+  const { sent } = engine(on, undefined, {}, [], true)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual([PROMPT.text])
 })
 
 test('turning it off is stored for the next session', async ($, on) => {
@@ -192,13 +232,13 @@ test('a skill command keeps its arguments when the plugin is off', async ($, on)
   expect(asked).toEqual([])
 })
 
-test('a skill command with short text keeps its arguments', async ($, on) => {
-  const { ran, asked } = engine(on)
+test('a skill command with short text is rewritten', async ($, on) => {
+  const { ran, asked } = engine(on, 'Goal: fix it.')
 
   await $.command.run(run('impeccable', 'fix it'))
 
-  expect(ran).toEqual(['fix it'])
-  expect(asked).toEqual([])
+  expect(asked).toHaveLength(1)
+  expect(ran).toEqual(['Goal: fix it.'])
 })
 
 test('a failed rewrite runs the skill command as typed', async ($, on) => {

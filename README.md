@@ -9,9 +9,9 @@ The rewritten prompt follows four parts: goal, context, constraints and expected
 - A `✦ Prompt Master` button sits in the prompt footer. Click it to turn rewriting on or off.
 - The command `/prompt-master` does the same.
 - To understand short replies such as "yes" or "continue", it also reads up to 500 characters from the end of the assistant's last reply; it uses them only to make your words clear, never to add requests. If the rewrite repeats three or more three-word runs from that reply that you did not type, it is dropped and your prompt is sent as typed, with a toast saying so.
-- Prompts shorter than 12 characters and the commands built into Claude Code are never rewritten.
+- Every prompt is rewritten, short or long; only empty prompts and the commands built into Claude Code are left as typed.
 - After a skill or plugin command, such as `/impeccable`, only the text is rewritten; the command lines stay as typed.
-- Prompts longer than 4000 characters are sent as typed, so a long paste is never cut.
+- The rewrite's token cap and time limit grow with the prompt's length, so a long paste is rewritten whole. If the rewrite still comes back cut short, the prompt is sent as typed, with a toast saying so.
 - While a prompt is being rewritten, the status line shows `✦ Prompt Master: rewriting…`.
 - Your on or off choice is saved and stays the same in new sessions.
 
