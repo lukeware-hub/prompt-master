@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'claude-code/testing'
-import type { Args, ModelCompleteResult, On, SessionMessage } from 'claude-code'
+import type { Args, CommandInfo, ModelCompleteResult, On, SessionMessage } from 'claude-code'
 
 const PROMPT = {
   text: 'fix the login bug in auth.ts',
@@ -12,7 +12,7 @@ const FOOTER = { plugin: 'prompt-master', component: 'SessionMode', props: { mod
 const COMMANDS = [
   { name: 'impeccable', description: '', source: 'plugin' },
   { name: 'model', description: '', source: 'builtin' },
-] as const
+] satisfies CommandInfo[]
 
 // The owner's prompt: the first line becomes the command, the rest its arguments.
 const SKILL_ARGS = '/frontend-design:frontend-design\n/design-taste-frontend\neta tudo desalinhado temq ue fira tudo alinha igai a esse'

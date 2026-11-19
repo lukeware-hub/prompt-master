@@ -1,6 +1,8 @@
 {
   "name": "prompt-master",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Rewrites each prompt into a clearer, structured one before sending; toggle button above the prompt.",
+  "author": { "name": "lukeware-hub" },
+  "license": "MIT",
   "types": "./types/index.d.ts"
 }
