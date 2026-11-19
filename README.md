@@ -8,7 +8,8 @@ The rewritten prompt follows four parts: goal, context, constraints and expected
 
 - A `✦ Prompt Master` button sits in the prompt footer. Click it to turn rewriting on or off.
 - The command `/prompt-master` does the same.
-- Slash commands and prompts shorter than 12 characters are never rewritten.
+- Prompts shorter than 12 characters and the commands built into Claude Code are never rewritten.
+- After a skill or plugin command, such as `/impeccable`, only the text is rewritten; the command lines stay as typed.
 - Prompts longer than 4000 characters are sent as typed, so a long paste is never cut.
 - While a prompt is being rewritten, the status line shows `✦ Prompt Master: rewriting…`.
 - Your on or off choice is saved and stays the same in new sessions.
