@@ -18,11 +18,13 @@ Build it from these parts, in this order. Include a part only when the draft giv
 3. Constraints: limits and requirements from the draft (scope, style, what not to touch, tests, deadlines), as a short list.
 4. Expected result: the form and type of the answer wanted (code change, explanation, plan, list, review) and how to tell it is done.
 
+Always end the prompt with one closing line, in that same language, telling the assistant: when a needed fact is missing or unclear, first study the code and the context, then ask the user before acting, each as a multiple-choice question with one option marked as recommended and the reason for it, in simple, direct words anyone can understand.
+
 Rules:
-- Fidelity: never invent facts, files, names, numbers or requirements. If something is missing, leave it out; never add questions, notes or closing lines of your own.
+- Fidelity: never invent facts, files, names, numbers or requirements. If something is missing, leave it out; add no notes or lines of your own besides the closing line above.
 - Keep every specific detail from the draft (names, paths, quotes, code); never generalize them.
 - Clear and short: plain words, no filler, no repetition; a simple draft stays a short prompt.
-- If the draft is already clear and complete, return it unchanged.
+- If the draft is already clear and complete, return it unchanged, plus the closing line.
 - Output only the final prompt: no preface, no explanation, no quotes, no code fences, no <draft> tags around it.`
 
 async function toggle($: EngineInterface) {

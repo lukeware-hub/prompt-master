@@ -109,3 +109,13 @@ test('with no Language set the rewrite keeps the draft language', async ($, on) 
 
   expect(systems[0]).toContain("Write the final prompt in the draft's own language")
 })
+
+test('the rewrite ends by asking for missing facts as multiple choice with a recommendation', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(systems[0]).toContain('multiple-choice question')
+  expect(systems[0]).toContain('recommended')
+  expect(systems[0]).not.toContain('never add questions')
+})
