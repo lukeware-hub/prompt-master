@@ -23,12 +23,15 @@ const run = (command: string, args: string) =>
 const USAGE = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
 
 // Stands for the engine: records what reached it and what the model was asked.
+// `reply` answers the rewrite (a failure result in place of text), `corrected` the spelling fix ('' fails it),
+// and `isCut` makes the rewrite use its whole token cap.
 function engine(
   on: On,
-  reply = 'Goal: fix the login bug in auth.ts.',
+  reply: string | ModelCompleteResult = 'Goal: fix the login bug in auth.ts.',
   settings: Record<string, unknown> = {},
   messages: SessionMessage[] = [],
   isCut = false,
+  corrected = '',
 ) {
   const sent: string[] = []
   const asked: string[] = []
@@ -44,9 +47,14 @@ function engine(
     asked.push(e.prompt)
     systems.push(e.system ?? '')
     limits.push({ maxTokens: e.maxTokens, timeoutMs: e.timeoutMs })
-    const usage = isCut ? { ...USAGE, output_tokens: e.maxTokens ?? 1024 } : USAGE
-    const value: ModelCompleteResult = reply
-      ? { isAnswered: true, text: reply, usage }
+    const isFix = String(e.system).startsWith('You fix the writing')
+    const text = isFix ? corrected : reply
+    if (typeof text !== 'string') {
+      return { value: text }
+    }
+    const usage = isCut && !isFix ? { ...USAGE, output_tokens: e.maxTokens ?? 1024 } : USAGE
+    const value: ModelCompleteResult = text
+      ? { isAnswered: true, text, usage }
       : { isAnswered: false, reason: 'aborted', usage: USAGE }
     return { value }
   })
@@ -110,12 +118,65 @@ test('a huge draft keeps the token cap and time limit within the model limits', 
   expect(limits[0]).toEqual({ maxTokens: 64000, timeoutMs: 300000 })
 })
 
-test('a rewrite cut short at its token cap sends the draft as typed', async ($, on) => {
+test('a rewrite cut short at its token cap sends the draft as typed when the spelling fix fails too', async ($, on) => {
   const { sent } = engine(on, undefined, {}, [], true)
 
   await $.prompt.submit(PROMPT)
 
   expect(sent).toEqual([PROMPT.text])
+})
+
+const TYPO = { ...PROMPT, text: 'pode cotinuar, mas nao mexe no `authService.ts`' }
+const FIXED = 'Pode continuar, mas não mexa no `authService.ts`.'
+
+test('every rewrite is told to fix spelling, accents, grammar and punctuation, short drafts included', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit(TYPO)
+
+  expect(systems[0]).toContain('Always fix every spelling mistake, typo, missing or wrong accent, grammar mistake')
+  expect(systems[0]).toContain('punctuation mistake')
+  expect(systems[0]).toContain('a one-word answer included')
+  expect(systems[0]).toContain('return it with only the writing fixes')
+  expect(systems[0]).not.toContain('return it unchanged')
+  expect(systems[0]).toContain('Never change code, paths, file names, identifiers')
+})
+
+test('a rewrite cut short still sends the draft with its spelling fixed', async ($, on) => {
+  const { sent, systems, asked } = engine(on, undefined, {}, [], true, FIXED)
+
+  await $.prompt.submit(TYPO)
+
+  expect(sent).toEqual([FIXED])
+  expect(systems[1]).toStartWith('You fix the writing')
+  expect(asked[1]).toBe(`<draft>\n${TYPO.text}\n</draft>`)
+})
+
+test('a rewrite that repeats the conversation still sends the draft with its spelling fixed', async ($, on) => {
+  const { sent } = engine(on, 'Goal: test it. Context: the installed copy already has the fix and only works after a restart.', {}, SESSION, false, FIXED)
+
+  await $.prompt.submit(TYPO)
+
+  expect(sent).toEqual([FIXED])
+})
+
+test('a rewrite refused by the API still sends the draft with its spelling fixed', async ($, on) => {
+  const failure: ModelCompleteResult = { isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: USAGE }
+  const { sent } = engine(on, failure, {}, [], false, FIXED)
+
+  await $.prompt.submit(TYPO)
+
+  expect(sent).toEqual([FIXED])
+})
+
+test('a rewrite that timed out is not asked again and the draft is sent as typed', async ($, on) => {
+  const failure: ModelCompleteResult = { isAnswered: false, reason: 'api-error', status: null, error: 'unknown', usage: USAGE }
+  const { sent, asked } = engine(on, failure, {}, [], false, FIXED)
+
+  await $.prompt.submit(TYPO)
+
+  expect(asked).toHaveLength(1)
+  expect(sent).toEqual([TYPO.text])
 })
 
 test('turning it off is stored for the next session', async ($, on) => {
