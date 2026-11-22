@@ -28,15 +28,19 @@ You need Claude Code installed.
 
 1. Answer `y` to add the marketplace.
 2. Press Enter to install for your user (all your projects).
-3. Done: the `✦ Prompt Master` button appears in the prompt footer.
+3. Done: the `✦ Prompt Master` button appears in the prompt footer. If it does not show up, restart the Claude Code session.
 
-**From a shell**, the same in one line:
+**From a shell**, the same in one line. It adds the marketplace to your user settings without asking first:
 
 ```
 claude plugin install prompt-master --marketplace lukeware-hub/prompt-master
 ```
 
 **In the Claude desktop app**: click **+** next to the prompt box, then **Plugins**, **Add marketplace**, type `lukeware-hub/prompt-master`, then **Add plugin**.
+
+## Privacy
+
+Each prompt you send, and up to 2000 tokens from the end of the assistant's last reply, is sent to the fast model (haiku) through Claude Code's own model API to be rewritten. Nothing is sent to any other service. Turn rewriting off with the button or `/prompt-master` to stop it.
 
 ## Uninstall
 
