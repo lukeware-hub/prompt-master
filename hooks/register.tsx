@@ -27,8 +27,8 @@ const MIN_CHECKED_TRIOS = 8
 
 // The draft and the session sit between tags; a tag written inside them gets an invisible space so it cannot close or open one.
 // Only the space added here is taken out again, so an invisible character the user typed stays.
-const fence = (text: string) => text.replace(/<\s*(\/?)\s*(draft|session)(?=[\s>/]|$)/gi, '<\u200b$1$2')
-const unfence = (text: string) => text.replace(/<\u200b(?=\/?(?:draft|session))/gi, '<')
+const fence = (text: string) => text.replace(/<(\s*\/?\s*)(draft|session)(?=[\s>/]|$)/gi, '<\u200b$1$2')
+const unfence = (text: string) => text.replace(/<\u200b(?=\s*\/?\s*(?:draft|session))/gi, '<')
 
 // The model's reply as text to send, or '' when it holds only spaces and invisible characters.
 function readReply(text: string) {
@@ -150,20 +150,27 @@ const CLOSING_PT =
 // Portuguese is a code (pt, pt-BR, pt_PT, ptbr) or a name (Portuguese, português, Brazilian Portuguese).
 const isPortuguese = (language: string) => /^pt(?![a-z])|^ptbr$|\bpt\b|portugu/i.test(language)
 
-// The closing line asks for a multiple-choice question with a recommended option.
-const MULTIPLE_CHOICE = /m[úu]ltiplas?[\s-]+escolhas?|multiple[\s-]+choice/i
-const RECOMMENDED = /recomend|sugeri|recommend|suggest/i
+// The closing line asks for a multiple-choice question with a recommended option, in any of these languages.
+const MULTIPLE_CHOICE =
+  /m[úu]ltipl[ae]s?[\s-]+(?:escolhas?|op[çc][õo]es)|escolhas?[\s-]+m[úu]ltipl[ae]s?|opci[oó]n(?:es)?[\s-]+m[úu]ltiples?|multiple[\s-]+choices?|choix[\s-]+multiples?|mehrfachauswahl/i
+const RECOMMENDED = /recomend|sugeri|recommand|conseill|recommend|suggest|empfohlen|empfehl/i
 
-function withClosing(text: string, language: string) {
-  const tail = text.slice(-400)
-  const hasClosing = MULTIPLE_CHOICE.test(tail) && RECOMMENDED.test(tail)
-  return text && isPortuguese(language) && !hasClosing ? `${text}\n\n${CLOSING_PT}` : text
+// The closing line is the last line of a rewrite of more than one line, when it asks for both;
+// a one-line rewrite has none, so a draft that talks about multiple choice is not mistaken for one.
+function closingLine(text: string) {
+  const lines = text.trimEnd().split('\n')
+  const last = lines.at(-1) ?? ''
+  return lines.length > 1 && MULTIPLE_CHOICE.test(last) && RECOMMENDED.test(last) ? last : ''
 }
 
-// The rewrite without its last line when that line is the closing line.
+function withClosing(text: string, language: string) {
+  return text && isPortuguese(language) && !closingLine(text) ? `${text}\n\n${CLOSING_PT}` : text
+}
+
+// The rewrite without its closing line.
 function withoutClosing(text: string) {
-  const lines = text.trimEnd().split('\n')
-  return MULTIPLE_CHOICE.test(lines.at(-1) ?? '') ? lines.slice(0, -1).join('\n') : text
+  const closing = closingLine(text)
+  return closing ? text.trimEnd().slice(0, -closing.length) : text
 }
 
 // The end of the last assistant reply, or '' when there is none or it cannot be read.
