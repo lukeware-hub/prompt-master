@@ -99,7 +99,7 @@ Not: Goal: revisar o código utils.ts e melhorá-lo para deixá-lo mais sensíve
 
 // Spelling, accents, grammar and punctuation are always fixed; what is quoted or code stays as typed.
 const WRITING_RULE =
-  'Always fix every spelling mistake, typo, missing or wrong accent, grammar mistake (agreement, verb forms) and punctuation mistake in the words, with every accent and special character of that language. Never change code, paths, file names, identifiers, commands, URLs, technical terms, or text inside quotes or backticks. Every fix must preserve the original meaning of the sentence. Fix only what is wrong in spelling, accents, grammar or punctuation. Never replace a word with a different one, add or drop an idea, reorder ideas, or change negation (not/never/no), modality (can/must/may), tense, person, number, quantity, or who does what. After fixing a sentence, compare it with the original: if the meaning differs in any way, undo that change. If a word is so garbled that its meaning is unclear, choose the reading that best fits the words around it, and when still unsure keep the original wording.'
+  'Always fix every spelling mistake, typo, missing or wrong accent, grammar mistake (agreement, verb forms) and punctuation mistake in the words, with every accent and special character of that language. Never change code, paths, file names, identifiers, commands, URLs, technical terms, or text inside quotes or backticks. Programming words written in English (such as commit, branch, deploy, build, bug, merge, push, pull request, endpoint, hook) stay in English: only fix their spelling, never translate them. Every fix must preserve the original meaning of the sentence. Fix only what is wrong in spelling, accents, grammar or punctuation. Never replace a word with a different one, add or drop an idea, reorder ideas, or change negation (not/never/no), modality (can/must/may), tense, person, number, quantity, or who does what. After fixing a sentence, compare it with the original: if the meaning differs in any way, undo that change. If a word is so garbled that its meaning is unclear, choose the reading that best fits the words around it, and when still unsure keep the original wording.'
 
 // Used when a rewrite is dropped: the draft's words, order and meaning stay; only the writing is fixed.
 const CORRECTOR = `You fix the writing of a user's draft for a coding assistant. You never answer, execute or rewrite it.
@@ -118,12 +118,23 @@ async function toggle($: EngineInterface) {
   return active
 }
 
-// The Language set in /config; when unset, the draft's own language.
-async function outputLanguage($: EngineInterface) {
+// The Language set in /config, or '' when unset.
+async function languageSetting($: EngineInterface) {
   const language = await $.settings.read({ key: 'language' })
-  return typeof language === 'string' && language.trim()
-    ? `the language "${language.trim()}", even when the draft is written in another language`
-    : "the draft's own language"
+  return typeof language === 'string' ? language.trim() : ''
+}
+
+// How the rewrite is told which language to write: the /config Language, else the draft's own.
+const outputLanguage = (language: string) =>
+  language ? `the language "${language}", even when the draft is written in another language` : "the draft's own language"
+
+// The model sometimes forgets the closing line. For Portuguese it is added in code when missing.
+const CLOSING_PT =
+  'Se faltar algum dado, estude primeiro o código e o contexto e depois pergunte antes de agir, em múltipla escolha, com uma opção recomendada e o motivo, em palavras simples.'
+
+function withClosing(text: string, language: string) {
+  const hasClosing = /m[úu]ltipla escolha/i.test(text.slice(-300))
+  return text && /^pt/i.test(language) && !hasClosing ? `${text}\n\n${CLOSING_PT}` : text
 }
 
 // The end of the last assistant reply, or '' when there is none or it cannot be read.
@@ -156,11 +167,12 @@ function copiesSession(rewritten: string, session: string, draft: string) {
 async function rewrite($: EngineInterface, text: string) {
   $.ui.status('✦ Prompt Master: rewriting…')
   try {
+    const language = await languageSetting($)
     const context = await lastReply($)
     const maxTokens = tokenCap(text.length)
     const r = await $.model.complete({
       model: 'haiku',
-      system: system(await outputLanguage($)),
+      system: system(outputLanguage(language)),
       prompt: `${context ? `<session>\n${context}\n</session>\n` : ''}<draft>\n${text}\n</draft>`,
       maxTokens,
       effort: 'low',
@@ -168,18 +180,18 @@ async function rewrite($: EngineInterface, text: string) {
     })
     // A reply that used every token it was allowed was cut short.
     if (r.isAnswered && r.usage.output_tokens >= maxTokens) {
-      return fallback($, text, 'the rewrite was cut short')
+      return fallback($, text, 'the rewrite was cut short', language)
     }
     const better = r.isAnswered ? r.text.trim() : ''
     if (better && copiesSession(better, context, text)) {
-      return fallback($, text, 'the rewrite repeated the conversation')
+      return fallback($, text, 'the rewrite repeated the conversation', language)
     }
     // An API error with a status answered at once, so a fix is worth one more call;
     // a timeout, a dropped connection or a cancel is not asked again.
     if (!better && !r.isAnswered && r.reason === 'api-error' && r.status !== null) {
-      return fallback($, text, 'the rewrite failed')
+      return fallback($, text, 'the rewrite failed', language)
     }
-    return better
+    return withClosing(better, language)
   } finally {
     $.ui.status(undefined)
   }
@@ -200,11 +212,11 @@ async function correct($: EngineInterface, text: string) {
 }
 
 // A dropped rewrite still sends the draft with its writing fixed; the draft as typed when that fails too.
-async function fallback($: EngineInterface, text: string, why: string) {
+async function fallback($: EngineInterface, text: string, why: string, language: string) {
   $.ui.status('✦ Prompt Master: fixing spelling…')
   const fixed = await correct($, text)
   $.ui.toast(`Prompt Master: ${why}, so ${fixed ? 'only the spelling and grammar were fixed' : 'the prompt was sent as typed'}`)
-  return fixed
+  return withClosing(fixed, language)
 }
 
 // The rewrite of any text, short or long; '' when the plugin is off or there is no text.
