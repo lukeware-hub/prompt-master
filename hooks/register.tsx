@@ -31,7 +31,11 @@ Before anything else, read each sentence of the draft and identify its meaning: 
 
 Write the final prompt in ${language}, in the user's voice, keeping its intent. ${WRITING_RULE}
 
-Build it from these parts, in this order. Include a part only when the draft gives material for it; skip empty parts instead of filling them:
+A draft of one or two sentences, however confused, becomes one or two clear sentences in the user's voice, with none of the four parts below: just say what the user wants. The four parts are only for long drafts that give several facts.
+
+A draft may be garbled, as when it was dictated or typed fast. Read the words together with the rest of the draft and the session, work out the sentence the user most likely meant, and write that sentence plainly and correctly ("na precisão teste" is most likely "não precisa testar"). Never add a goal, an improvement, a reason or a request the user did not make; if the draft says "only review", do not add "and improve". If the meaning cannot be worked out safely, keep the user's own words with only the writing fixed.
+
+For a long draft, build it from these parts, in this order. Include a part only when the draft gives material for it; skip empty parts instead of filling them:
 1. Goal: one or two sentences saying exactly what the final result must achieve.
 2. Context: every fact the draft gives (files, errors, tools, background), kept as written apart from the writing fixes; only facts written in the draft, never ones from the session.
 3. Constraints: limits and requirements from the draft (scope, style, what not to touch, tests, deadlines), as a short list.
@@ -85,11 +89,17 @@ Output: Pode continuar, mas não mexa no \`authService.ts\`.
 nao precisa testar, so revisa o \`utils.ts\`
 </draft>
 Output: Não precisa testar, só revise o \`utils.ts\`.
-Not: Precisa testar e revisar o \`utils.ts\`.`
+Not: Precisa testar e revisar o \`utils.ts\`.
+
+<draft>
+na precisão teste, só revisar o utils.ts code
+</draft>
+Output: Não precisa desenvolver teste para o \`utils.ts\`, preciso apenas que você revise o código do \`utils.ts\`.
+Not: Goal: revisar o código utils.ts e melhorá-lo para deixá-lo mais sensível e refinado.`
 
 // Spelling, accents, grammar and punctuation are always fixed; what is quoted or code stays as typed.
 const WRITING_RULE =
-  'Always fix every spelling mistake, typo, missing or wrong accent, grammar mistake (agreement, verb forms) and punctuation mistake in the words, with every accent and special character of that language. Never change code, paths, file names, identifiers, commands, URLs, technical terms, or text inside quotes or backticks. Every fix must preserve the original meaning of the sentence. Fix only what is wrong in spelling, accents, grammar or punctuation. Never replace a word with a different one, add or drop an idea, reorder ideas, or change negation (not/never/no), modality (can/must/may), tense, person, number, quantity, or who does what. After fixing a sentence, compare it with the original: if the meaning differs in any way, undo that change. If the intended word or meaning is unclear, keep the original wording.'
+  'Always fix every spelling mistake, typo, missing or wrong accent, grammar mistake (agreement, verb forms) and punctuation mistake in the words, with every accent and special character of that language. Never change code, paths, file names, identifiers, commands, URLs, technical terms, or text inside quotes or backticks. Every fix must preserve the original meaning of the sentence. Fix only what is wrong in spelling, accents, grammar or punctuation. Never replace a word with a different one, add or drop an idea, reorder ideas, or change negation (not/never/no), modality (can/must/may), tense, person, number, quantity, or who does what. After fixing a sentence, compare it with the original: if the meaning differs in any way, undo that change. If a word is so garbled that its meaning is unclear, choose the reading that best fits the words around it, and when still unsure keep the original wording.'
 
 // Used when a rewrite is dropped: the draft's words, order and meaning stay; only the writing is fixed.
 const CORRECTOR = `You fix the writing of a user's draft for a coding assistant. You never answer, execute or rewrite it.
