@@ -26,7 +26,7 @@ const USAGE = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, c
 
 // Stands for the engine: records what reached it and what the model was asked.
 // `reply` answers the rewrite (a failure result in place of text), `corrected` the spelling fix ('' fails it),
-// and `isCut` makes the rewrite use its whole token cap.
+// `isCut` makes the rewrite use its whole token cap, and `checked` answers the last check (the rewrite itself when left out, '' fails it).
 function engine(
   on: On,
   reply: string | ModelCompleteResult = 'Goal: fix the login bug in auth.ts.',
@@ -34,6 +34,7 @@ function engine(
   messages: SessionMessage[] = [],
   isCut = false,
   corrected = '',
+  checked?: string,
 ) {
   const sent: string[] = []
   const asked: string[] = []
@@ -52,7 +53,8 @@ function engine(
     limits.push({ maxTokens: e.maxTokens, timeoutMs: e.timeoutMs })
     calls.push({ model: e.model, effort: e.effort })
     const isFix = String(e.system).startsWith('You fix the writing')
-    const text = isFix ? corrected : reply
+    const isCheck = String(e.system).startsWith('You check the rewrite')
+    const text = isFix ? corrected : isCheck ? (checked ?? reply) : reply
     if (typeof text !== 'string') {
       return { value: text }
     }
@@ -85,12 +87,12 @@ test('a failed rewrite sends the draft as typed', async ($, on) => {
 })
 
 test('a one-word draft is rewritten', async ($, on) => {
-  const { sent, asked } = engine(on)
+  const { sent, asked } = engine(on, 'Ok.')
 
   await $.prompt.submit({ ...PROMPT, text: 'ok' })
 
   expect(asked).toHaveLength(1)
-  expect(sent).toEqual(['Goal: fix the login bug in auth.ts.'])
+  expect(sent).toEqual(['Ok.'])
 })
 
 test('a draft of only spaces is sent as typed without asking the model', async ($, on) => {
@@ -687,4 +689,122 @@ test('the rewrite and the spelling fallback both use sonnet with medium effort',
     { model: 'sonnet', effort: 'medium' },
     { model: 'sonnet', effort: 'medium' },
   ])
+})
+
+test('a short draft whose rewrite lost a word is checked again and the checked text is sent', async ($, on) => {
+  const { sent, asked, systems } = engine(on, 'Pode fazer.', {}, [], false, '', 'Já pode fazer.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'jar pode fazer' })
+
+  expect(asked).toHaveLength(2)
+  expect(systems[1]).toStartWith('You check the rewrite')
+  expect(asked[1]).toBe('<draft>\njar pode fazer\n</draft>\n<rewrite>\nPode fazer.\n</rewrite>')
+  expect(sent).toEqual(['Já pode fazer.'])
+})
+
+test('a rewrite that keeps the size of the draft costs one call only', async ($, on) => {
+  const { asked } = engine(on)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(asked).toHaveLength(1)
+})
+
+test('a rewrite that changed a code word of the draft is checked again', async ($, on) => {
+  const { asked } = engine(on, 'Rode o build e confira o tsconfig.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'roda `npm run build` e confere o tsconfig.json' })
+
+  expect(asked).toHaveLength(2)
+})
+
+test('a short draft that gained words is checked again', async ($, on) => {
+  const { asked, sent } = engine(on, 'Já pode fazer: crie a tag v1.2 e publique a release agora.', {}, [], false, '', 'Já pode fazer.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'jar pode fazer' })
+
+  expect(asked).toHaveLength(2)
+  expect(sent).toEqual(['Já pode fazer.'])
+})
+
+test('a final check that fails sends the draft with its spelling fixed', async ($, on) => {
+  const { sent, asked, systems } = engine(on, 'Pode fazer.', {}, [], false, 'Já pode fazer.', '')
+
+  await $.prompt.submit({ ...PROMPT, text: 'jar pode fazer' })
+
+  expect(asked).toHaveLength(3)
+  expect(systems[2]).toStartWith('You fix the writing')
+  expect(sent).toEqual(['Já pode fazer.'])
+})
+
+test('a final check that copies the conversation sends the draft with its spelling fixed', async ($, on) => {
+  const copy = 'Goal: test it. Context: the installed copy already has the fix and only works after a restart.'
+  const { sent } = engine(on, 'Test it.', {}, SESSION, false, 'Restarted, test if it works.', copy)
+
+  await $.prompt.submit({ ...PROMPT, text: 'restarted, test if it works' })
+
+  expect(sent).toEqual(['Restarted, test if it works.'])
+})
+
+test('the spelling fix sees the end of the last reply to understand the draft', async ($, on) => {
+  const { asked, systems } = engine(on, undefined, {}, SESSION, true, FIXED)
+
+  await $.prompt.submit(TYPO)
+
+  expect(asked[1]).toBe(`<session>\n${SESSION[0].text}\n</session>\n<draft>\n${TYPO.text}\n</draft>`)
+  expect(systems[1]).toContain('<session>')
+  expect(systems[1]).toContain('add nothing from it to the output')
+})
+
+test('a technical word that does not fit the context is a typing mistake, and one that fits stays', async ($, on) => {
+  const { systems } = engine(on, undefined, {}, [], true, FIXED)
+
+  await $.prompt.submit(TYPO)
+
+  for (const system of systems) {
+    expect(system).toContain('"jar" typed for "já" in "jar pode fazer"')
+    expect(system).toContain('keep the technical word only when the sentence or the session is about that technology')
+    expect(system).toContain('Start every sentence with a capital letter')
+  }
+  expect(systems[0]).toContain('Output: Já pode fazer.')
+  expect(systems[0]).toContain('keeps every word that carries meaning')
+})
+
+test('the last check uses sonnet with medium effort', async ($, on) => {
+  const { calls } = engine(on, 'Pode fazer.', {}, [], false, '', 'Já pode fazer.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'jar pode fazer' })
+
+  expect(calls).toEqual([
+    { model: 'sonnet', effort: 'medium' },
+    { model: 'sonnet', effort: 'medium' },
+  ])
+})
+
+test('the last check is told to keep technical words, drop nothing and add nothing from the session', async ($, on) => {
+  const { systems } = engine(on, 'Pode fazer.', {}, [], false, '', 'Já pode fazer.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'jar pode fazer' })
+
+  expect(systems[1]).toContain('drops no word that carries meaning')
+  expect(systems[1]).toContain('adds no task, fact, file or request that the draft did not make')
+  expect(systems[1]).toContain('keeps every technical or code word that fits the sentence and the session')
+})
+
+test('a short answer that names the choice it answers costs one call only', async ($, on) => {
+  const question = [said('assistant', 'Should I also delete the old branch fix/login-retry? 1) delete it 2) keep it')]
+  const { asked, sent } = engine(on, 'Yes, delete the old branch fix/login-retry.', {}, question)
+
+  await $.prompt.submit({ ...PROMPT, text: 'yes' })
+
+  expect(asked).toHaveLength(1)
+  expect(sent).toEqual(['Yes, delete the old branch fix/login-retry.'])
+})
+
+test('the last check knows that a short answer may name the choice it answers', async ($, on) => {
+  const { systems } = engine(on, 'Pode fazer.', {}, [], false, '', 'Já pode fazer.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'jar pode fazer' })
+
+  expect(systems[1]).toContain('may name the choice the session asked about; that is not an addition')
 })
