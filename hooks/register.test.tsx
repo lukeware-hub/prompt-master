@@ -334,7 +334,8 @@ test('the rewrite ends by asking for missing facts as multiple choice with a rec
 
   expect(systems[0]).toContain('multiple-choice question')
   expect(systems[0]).toContain('recommended')
-  expect(systems[0]).toContain('one short closing line (one sentence, at most 30 words)')
+  expect(systems[0]).toContain('one closing line (one sentence)')
+  expect(systems[0]).not.toContain('at most 30 words')
   expect(systems[0]).not.toContain('never add questions')
 })
 
@@ -807,4 +808,88 @@ test('the last check knows that a short answer may name the choice it answers', 
   await $.prompt.submit({ ...PROMPT, text: 'jar pode fazer' })
 
   expect(systems[1]).toContain('may name the choice the session asked about; that is not an addition')
+})
+
+test('the labels of the four parts are written in the language of the prompt', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(systems[0]).toContain('Write the part labels in the same language as the prompt (in Portuguese: Objetivo, Contexto, Restrições, Resultado esperado)')
+})
+
+test('an informal imperative is kept as typed and only a negative one changes form', async ($, on) => {
+  const { systems } = engine(on, undefined, {}, [], true, FIXED)
+
+  await $.prompt.submit(TYPO)
+
+  for (const system of systems) {
+    expect(system).toContain('An informal imperative (roda, faz, adiciona, abre) is correct Portuguese')
+    expect(system).toContain('roda is not execute')
+    expect(system).toContain('não mexe becomes não mexa')
+  }
+  expect(systems[0]).toContain('só revisa o `utils.ts`')
+})
+
+test('a word that fits both as a technical word and as a common word is kept as typed', async ($, on) => {
+  const { systems } = engine(on, undefined, {}, [], true, FIXED)
+
+  await $.prompt.submit(TYPO)
+
+  for (const system of systems) {
+    expect(system).toContain('when the session itself is about that technology and the sentence also fits it, keep the word as typed')
+  }
+})
+
+test('the user keeps their own verbs, with an example of an informal imperative kept', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(systems[0]).toContain("Keep the user's own verbs and their form")
+  expect(systems[0]).toContain('Output: Roda os testes e faz o commit.')
+  expect(systems[0]).toContain('Not: Rode os testes e faça o commit.')
+  expect(systems[0]).toContain('an informal imperative is not a mistake')
+})
+
+test('in Portuguese the four labels left in English are written in Portuguese', async ($, on) => {
+  const long = 'Goal: revisar o login.\n\nContext:\n- o erro aparece no `auth.ts`.\n\n**Constraints:**\n- não mexa no `legacy.js`.\n\nExpected result: um resumo.'
+  const { sent } = engine(on, long, { language: 'pt-BR' })
+
+  await $.prompt.submit({ ...PROMPT, text: 'revisa o login, o erro aparece no `auth.ts`, nao mexa no `legacy.js` e quero um resumo' })
+
+  expect(sent[0]).toStartWith('Objetivo: revisar o login.')
+  expect(sent[0]).toContain('\n\nContexto:\n')
+  expect(sent[0]).toContain('**Restrições:**')
+  expect(sent[0]).toContain('\n\nResultado esperado: um resumo.')
+  expect(sent[0]).not.toMatch(/Goal|Constraints|Expected result/)
+})
+
+test('in other languages and with no language the labels are left as the model wrote them', async ($, on) => {
+  const long = 'Goal: review the login.\n\nContext: the error is in `auth.ts`.'
+  const { sent } = engine(on, long, { language: 'en' })
+
+  await $.prompt.submit({ ...PROMPT, text: 'review the login, the error is in `auth.ts`' })
+
+  expect(sent).toEqual([long])
+})
+
+test('a line that only starts with a label word inside the text is left alone in Portuguese', async ($, on) => {
+  const reply = 'Revise o `utils.ts`.\n\nO Context: do React muda.'
+  const { sent } = engine(on, reply, { language: 'pt-BR' })
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent[0]).toContain('O Context: do React muda.')
+})
+
+test('the prompt says the user verbs are final and that a technical word is ambiguous only when the session is about it', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(systems[0]).toContain("THE USER'S VERBS ARE FINAL")
+  expect(systems[0]).toContain('Turning an informal imperative into a formal one is an error, not a fix')
+  expect(systems[0]).toContain('AMBIGUOUS WORDS: this applies only when the session itself is about a technical word')
+  expect(systems[0]).toContain('a technical word that does not fit the sentence is a mistyped common word and is fixed')
 })
