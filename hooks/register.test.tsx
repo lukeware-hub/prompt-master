@@ -269,6 +269,50 @@ test('the rewrite is written in the Language set in /config', async ($, on) => {
   expect(systems[0]).toContain('Write the final prompt in the language "pt-BR", even when the draft is written in another language')
 })
 
+const CLOSING = 'Se faltar algum dado, estude primeiro o código e o contexto e depois pergunte antes de agir, em múltipla escolha, com uma opção recomendada e o motivo, em palavras simples.'
+
+test('in Portuguese a rewrite that forgot the closing line gets it added', async ($, on) => {
+  const { sent } = engine(on, 'Revise o `utils.ts`.', { language: 'pt-BR' })
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual([`Revise o \`utils.ts\`.\n\n${CLOSING}`])
+})
+
+test('in Portuguese a rewrite that has its own closing line is not given a second one', async ($, on) => {
+  const own = 'Revise o `utils.ts`.\n\nSe faltar algo, estude o código e pergunte em múltipla escolha, com uma opção recomendada.'
+  const { sent } = engine(on, own, { language: 'pt-BR' })
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual([own])
+})
+
+test('other languages are left as the model wrote them', async ($, on) => {
+  const { sent } = engine(on, 'Review `utils.ts`.', { language: 'en' })
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual(['Review `utils.ts`.'])
+})
+
+test('in Portuguese the spelling-only fallback also gets the closing line', async ($, on) => {
+  const { sent } = engine(on, undefined, { language: 'pt-BR' }, [], true, FIXED)
+
+  await $.prompt.submit(TYPO)
+
+  expect(sent).toEqual([`${FIXED}\n\n${CLOSING}`])
+})
+
+test('programming words in English are only spell-fixed, never translated', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(systems[0]).toContain('Programming words written in English')
+  expect(systems[0]).toContain('only fix their spelling, never translate them')
+})
+
 test('with no Language set the rewrite keeps the draft language', async ($, on) => {
   const { systems } = engine(on)
 
