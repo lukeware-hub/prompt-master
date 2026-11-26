@@ -149,10 +149,22 @@ test('every fix is told to keep the meaning, and the meaning is read first', asy
 
   const rule = 'Every fix must preserve the original meaning of the sentence'
   expect(systems[0]).toContain('identify its meaning')
-  expect(systems[0].indexOf('identify its meaning')).toBeLessThan(systems[0].indexOf('Build it from these parts'))
+  expect(systems[0].indexOf('identify its meaning')).toBeLessThan(systems[0].indexOf('build it from these parts'))
   expect(systems[0]).toContain(rule)
   expect(systems[0]).toContain('if the meaning differs in any way, undo that change')
   expect(systems[1]).toContain(rule)
+})
+
+test('a short or garbled draft stays short and gets no invented goal', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit(TYPO)
+
+  expect(systems[0]).toContain('becomes one or two clear sentences')
+  expect(systems[0]).toContain('The four parts are only for long drafts')
+  expect(systems[0]).toContain('work out the sentence the user most likely meant')
+  expect(systems[0]).toContain('Never add a goal, an improvement, a reason or a request the user did not make')
+  expect(systems[0]).toContain('na precisão teste, só revisar o utils.ts code')
 })
 
 test('a rewrite cut short still sends the draft with its spelling fixed', async ($, on) => {
