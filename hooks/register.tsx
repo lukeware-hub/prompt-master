@@ -3,11 +3,15 @@ import type { EngineInterface, Register } from 'claude-code'
 
 const isOn = atom({ plugin: 'prompt-master', key: 'isOn' } as const, true)
 
+// Every call to the model uses this model and effort: the rewrite and the spelling-only fallback.
+const MODEL = 'sonnet'
+const EFFORT = 'medium'
+
 // The reply's token cap and time limit grow with the draft, so a long draft is rewritten whole.
 // The cap adds one token per character, the worst case for any script (Latin text needs about a quarter of that).
 const BASE_TOKENS = 2000
 const MAX_TOKENS = 64000
-const BASE_TIMEOUT_MS = 15000
+const BASE_TIMEOUT_MS = 30000
 const MAX_TIMEOUT_MS = 300000
 
 const tokenCap = (length: number) => Math.min(MAX_TOKENS, BASE_TOKENS + length)
@@ -211,11 +215,11 @@ async function rewrite($: EngineInterface, text: string) {
     const context = await lastReply($)
     const maxTokens = tokenCap(text.length)
     const r = await $.model.complete({
-      model: 'haiku',
+      model: MODEL,
       system: system(outputLanguage(language)),
       prompt: `${context ? `<session>\n${fence(context)}\n</session>\n` : ''}<draft>\n${fence(text)}\n</draft>`,
       maxTokens,
-      effort: 'low',
+      effort: EFFORT,
       timeoutMs: timeLimit(text.length),
     })
     // `await` keeps the status line up until the spelling fix ends, before `finally` clears it.
@@ -242,11 +246,11 @@ async function rewrite($: EngineInterface, text: string) {
 async function correct($: EngineInterface, text: string) {
   const maxTokens = tokenCap(text.length)
   const r = await $.model.complete({
-    model: 'haiku',
+    model: MODEL,
     system: CORRECTOR,
     prompt: `<draft>\n${fence(text)}\n</draft>`,
     maxTokens,
-    effort: 'low',
+    effort: EFFORT,
     timeoutMs: timeLimit(text.length),
   })
   return r.isAnswered && r.usage.output_tokens < maxTokens ? readReply(r.text) : ''

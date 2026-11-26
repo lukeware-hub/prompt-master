@@ -40,6 +40,7 @@ function engine(
   const systems: string[] = []
   const ran: string[] = []
   const limits: { maxTokens?: number; timeoutMs?: number }[] = []
+  const calls: { model?: string; effort?: string }[] = []
   on('settings.read', () => ({ value: settings }))
   on('command.list', () => ({ value: COMMANDS }))
   on('session.messages', () => ({ value: messages }))
@@ -49,6 +50,7 @@ function engine(
     asked.push(e.prompt)
     systems.push(e.system ?? '')
     limits.push({ maxTokens: e.maxTokens, timeoutMs: e.timeoutMs })
+    calls.push({ model: e.model, effort: e.effort })
     const isFix = String(e.system).startsWith('You fix the writing')
     const text = isFix ? corrected : reply
     if (typeof text !== 'string') {
@@ -62,7 +64,7 @@ function engine(
   })
   on('command.register', (_, e) => ({ value: { command: e.name } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  return { sent, asked, systems, ran, limits }
+  return { sent, asked, systems, ran, limits, calls }
 }
 
 test('a short draft is rewritten from inside draft tags', async ($, on) => {
@@ -108,8 +110,8 @@ test('a long draft is rewritten with a token cap and time limit that grow with i
   await $.prompt.submit({ ...PROMPT, text: long })
 
   expect(sent).toEqual(['Goal: fix the login bug in auth.ts.', 'Goal: fix the login bug in auth.ts.'])
-  expect(limits[0]).toEqual({ maxTokens: 2028, timeoutMs: 15280 })
-  expect(limits[1]).toEqual({ maxTokens: 22000, timeoutMs: 215000 })
+  expect(limits[0]).toEqual({ maxTokens: 2028, timeoutMs: 30280 })
+  expect(limits[1]).toEqual({ maxTokens: 22000, timeoutMs: 230000 })
 })
 
 test('a huge draft keeps the token cap and time limit within the model limits', async ($, on) => {
@@ -674,4 +676,15 @@ test('a space the user typed after a less-than sign is kept', async ($, on) => {
 
   expect(asked[0]).toBe('<draft>\nif x <\u200b session limit\n</draft>')
   expect(sent).toEqual(['If x < session limit.'])
+})
+
+test('the rewrite and the spelling fallback both use sonnet with medium effort', async ($, on) => {
+  const { calls } = engine(on, undefined, {}, [], true, FIXED)
+
+  await $.prompt.submit(TYPO)
+
+  expect(calls).toEqual([
+    { model: 'sonnet', effort: 'medium' },
+    { model: 'sonnet', effort: 'medium' },
+  ])
 })
