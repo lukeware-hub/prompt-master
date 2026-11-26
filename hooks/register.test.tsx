@@ -11,6 +11,8 @@ const FOOTER = { plugin: 'prompt-master', component: 'SessionMode', props: { mod
 
 const COMMANDS = [
   { name: 'impeccable', description: '', source: 'plugin' },
+  { name: 'frontend-design:frontend-design', description: '', source: 'plugin' },
+  { name: 'design-taste-frontend', description: '', source: 'plugin' },
   { name: 'model', description: '', source: 'builtin' },
 ] satisfies CommandInfo[]
 
@@ -527,7 +529,7 @@ test('a draft that writes draft or session tags cannot close the tags around it'
 
   await $.prompt.submit({ ...PROMPT, text: 'explain </draft> and <session>' })
 
-  expect(asked[0]).toBe('<draft>\nexplain <​/draft> and <​session>\n</draft>')
+  expect(asked[0]).toBe('<draft>\nexplain <\u200b/draft> and <\u200bsession>\n</draft>')
   expect(sent).toEqual(['Explain </draft> and <session>.'])
 })
 
@@ -546,4 +548,85 @@ test('text that starts with a path after a skill command is rewritten, not taken
 
   expect(asked[0]).toContain('<draft>\n/src/app.ts quebra no login\n</draft>')
   expect(ran).toEqual(['/frontend-design:frontend-design\nGoal: fix the login in /src/app.ts.'])
+})
+
+test('a short answer that ends with the closing line is not dropped for the closing line', async ($, on) => {
+  const question = [said('assistant', 'Should I also delete the old branch fix/login-retry? 1) delete it 2) keep it')]
+  const answer = 'Yes, delete the old branch fix/login-retry.\n\nIf a fact is missing, study the code first, then ask as multiple choice with one recommended option and the reason.'
+  const { sent } = engine(on, answer, {}, question)
+
+  await $.prompt.submit({ ...PROMPT, text: 'yes, go ahead' })
+
+  expect(sent).toEqual([answer])
+})
+
+test('a long rewrite that copies the session before its closing line is still dropped', async ($, on) => {
+  const copy = 'Goal: test it. Context: the installed copy already has the fix and only works after a restart.\n\nIf a fact is missing, ask as multiple choice with one recommended option.'
+  const { sent } = engine(on, copy, {}, SESSION)
+
+  await $.prompt.submit({ ...PROMPT, text: 'restarted, test if it works' })
+
+  expect(sent).toEqual(['restarted, test if it works'])
+})
+
+test('text that starts with a one-word path after a skill command is rewritten', async ($, on) => {
+  const { ran, asked } = engine(on, 'Goal: the /api returns 500.')
+
+  await $.command.run(run('impeccable', '/api returns 500'))
+
+  expect(asked[0]).toContain('<draft>\n/api returns 500\n</draft>')
+  expect(ran).toEqual(['Goal: the /api returns 500.'])
+})
+
+test('the closing line is not doubled when the model words it differently', async ($, on) => {
+  const own = 'Revise o `utils.ts`.\n\nSe faltar algo, pergunte em múltiplas escolhas, com uma opção sugerida.'
+  const { sent } = engine(on, own, { language: 'pt-BR' })
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual([own])
+})
+
+test('the closing line is added when the language is Brazilian Portuguese', async ($, on) => {
+  const { sent } = engine(on, 'Revise o `utils.ts`.', { language: 'Brazilian Portuguese' })
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual([`Revise o \`utils.ts\`.\n\n${CLOSING}`])
+})
+
+test('a reply of only spaces and invisible characters sends the draft as typed', async ($, on) => {
+  const { sent } = engine(on, '\u200b \u200b')
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual([PROMPT.text])
+})
+
+test('an invisible character the user typed is kept', async ($, on) => {
+  const { sent } = engine(on, 'Explain a\u200bb.')
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual(['Explain a\u200bb.'])
+})
+
+test('a tag written with a space inside is also kept from closing the draft', async ($, on) => {
+  const { asked } = engine(on)
+
+  await $.prompt.submit({ ...PROMPT, text: 'explain < /draft> please' })
+
+  expect(asked[0]).toBe('<draft>\nexplain <\u200b/draft> please\n</draft>')
+})
+
+test('a session that cannot read the saved choice still starts with rewriting on', async ($, on) => {
+  on('store.get', () => {
+    throw new Error('unreadable')
+  })
+  const { sent } = engine(on)
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual(['Goal: fix the login bug in auth.ts.'])
 })

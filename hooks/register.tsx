@@ -21,12 +21,20 @@ const CONTEXT_CHARS = CONTEXT_TOKENS * CHARS_PER_TOKEN
 
 // A rewrite with this many three-word runs taken from the session copied it.
 // A shorter rewrite (a short answer naming the choice it answers) is never checked: it has little room to copy.
+// The closing line is left out of that count, since every rewrite ends with one.
 const COPY_LIMIT = 3
 const MIN_CHECKED_TRIOS = 8
 
 // The draft and the session sit between tags; a tag written inside them gets an invisible space so it cannot close or open one.
-const fence = (text: string) => text.replace(/<(\/?)(draft|session)(?=[\s>])/gi, '<​$1$2')
-const unfence = (text: string) => text.replace(/​/g, '')
+// Only the space added here is taken out again, so an invisible character the user typed stays.
+const fence = (text: string) => text.replace(/<\s*(\/?)\s*(draft|session)(?=[\s>/]|$)/gi, '<\u200b$1$2')
+const unfence = (text: string) => text.replace(/<\u200b(?=\/?(?:draft|session))/gi, '<')
+
+// The model's reply as text to send, or '' when it holds only spaces and invisible characters.
+function readReply(text: string) {
+  const reply = unfence(text).trim()
+  return /^[\s\u200b]*$/.test(reply) ? '' : reply
+}
 
 const system = (language: string) => `You turn a user's draft into a better prompt for a coding assistant. You never answer or execute the draft.
 
@@ -139,13 +147,23 @@ const outputLanguage = (language: string) =>
 const CLOSING_PT =
   'Se faltar algum dado, estude primeiro o código e o contexto e depois pergunte antes de agir, em múltipla escolha, com uma opção recomendada e o motivo, em palavras simples.'
 
-// Portuguese is a code (pt, pt-BR, pt_PT) or a name (Portuguese, português).
-const isPortuguese = (language: string) => /^(pt(?![a-z])|portugu)/i.test(language)
+// Portuguese is a code (pt, pt-BR, pt_PT, ptbr) or a name (Portuguese, português, Brazilian Portuguese).
+const isPortuguese = (language: string) => /^pt(?![a-z])|^ptbr$|\bpt\b|portugu/i.test(language)
+
+// The closing line asks for a multiple-choice question with a recommended option.
+const MULTIPLE_CHOICE = /m[úu]ltiplas?[\s-]+escolhas?|multiple[\s-]+choice/i
+const RECOMMENDED = /recomend|sugeri|recommend|suggest/i
 
 function withClosing(text: string, language: string) {
   const tail = text.slice(-400)
-  const hasClosing = /m[úu]ltipla escolha/i.test(tail) && /recomendad/i.test(tail)
+  const hasClosing = MULTIPLE_CHOICE.test(tail) && RECOMMENDED.test(tail)
   return text && isPortuguese(language) && !hasClosing ? `${text}\n\n${CLOSING_PT}` : text
+}
+
+// The rewrite without its last line when that line is the closing line.
+function withoutClosing(text: string) {
+  const lines = text.trimEnd().split('\n')
+  return MULTIPLE_CHOICE.test(lines.at(-1) ?? '') ? lines.slice(0, -1).join('\n') : text
 }
 
 // The end of the last assistant reply, or '' when there is none or it cannot be read.
@@ -171,7 +189,7 @@ function trios(text: string) {
 
 // Whether the rewrite repeats the session's words that the draft never wrote.
 function copiesSession(rewritten: string, session: string, draft: string) {
-  const out = trios(rewritten)
+  const out = trios(withoutClosing(rewritten))
   if (out.size < MIN_CHECKED_TRIOS) {
     return false
   }
@@ -198,7 +216,7 @@ async function rewrite($: EngineInterface, text: string) {
     if (r.isAnswered && r.usage.output_tokens >= maxTokens) {
       return await fallback($, text, 'the rewrite was cut short', language)
     }
-    const better = r.isAnswered ? unfence(r.text.trim()) : ''
+    const better = r.isAnswered ? readReply(r.text) : ''
     if (better && copiesSession(better, context, text)) {
       return await fallback($, text, 'the rewrite repeated the conversation', language)
     }
@@ -224,7 +242,7 @@ async function correct($: EngineInterface, text: string) {
     effort: 'low',
     timeoutMs: timeLimit(text.length),
   })
-  return r.isAnswered && r.usage.output_tokens < maxTokens ? unfence(r.text.trim()) : ''
+  return r.isAnswered && r.usage.output_tokens < maxTokens ? readReply(r.text) : ''
 }
 
 // A dropped rewrite still sends the draft with its writing fixed; the draft as typed when that fails too.
@@ -243,9 +261,12 @@ async function improve($: EngineInterface, text: string) {
   return rewrite($, text)
 }
 
-// A command line starts with a slash and a command name, which has no slash inside it
-// (frontend-design:frontend-design). Text that starts with a path (/src/app.ts) is still the user's text.
-const isCommandLine = (line: string) => /^\/[^\s/]+(\s|$)/.test(line.trimStart())
+// A command line starts with a slash and the name of a known command. Text that starts with
+// a slash and anything else (/src/app.ts, /api returns 500) is still the user's text.
+function isCommandLine(line: string, names: Set<string>) {
+  const name = line.trimStart().match(/^\/(\S+)/)?.[1]
+  return name !== undefined && names.has(name)
+}
 
 export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
@@ -266,13 +287,15 @@ export const register: Register = on => {
     }
 
     // Skills and plugin commands take a prompt; built-in commands take settings and paths.
-    const info = (await $.command.list()).find(c => c.name === e.command)
+    const commands = await $.command.list()
+    const info = commands.find(c => c.name === e.command)
     if (info === undefined || info.source === 'builtin') {
       return next(e)
     }
 
+    const names = new Set(commands.map(c => c.name))
     const lines = e.args.split('\n')
-    const firstText = lines.findIndex(line => !isCommandLine(line))
+    const firstText = lines.findIndex(line => !isCommandLine(line, names))
     if (firstText < 0) {
       return next(e)
     }
@@ -281,14 +304,17 @@ export const register: Register = on => {
     return next(better ? { ...e, args: [...lines.slice(0, firstText), better].join('\n') } : e)
   }).catch(($, e, next) => next(e))
 
+  // A saved choice that cannot be read keeps the default (on); the command is still registered, and the session still starts.
   on('session.start', async ($, e, next) => {
-    const saved = await $.store.get('isOn')
-    if (typeof saved === 'boolean') {
-      await update($, isOn, () => saved)
-    }
+    try {
+      const saved = await $.store.get('isOn')
+      if (typeof saved === 'boolean') {
+        await update($, isOn, () => saved)
+      }
+    } catch {}
     await $.command.register({ name: 'prompt-master', description: 'Turn prompt rewriting on or off' })
     return next(e)
-  })
+  }).catch(($, e, next) => next(e))
 
   on('command.run', { command: 'prompt-master' }, async $ => ({
     text: `Prompt Master: ${(await toggle($)) ? 'on' : 'off'}`,
