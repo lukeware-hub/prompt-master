@@ -893,3 +893,14 @@ test('the prompt says the user verbs are final and that a technical word is ambi
   expect(systems[0]).toContain('AMBIGUOUS WORDS: this applies only when the session itself is about a technical word')
   expect(systems[0]).toContain('a technical word that does not fit the sentence is a mistyped common word and is fixed')
 })
+
+test('a negative imperative always takes the other form and a statement is not one', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(systems[0]).toContain('A NEGATIVE IMPERATIVE ALWAYS TAKES THE OTHER FORM')
+  expect(systems[0]).toContain('"não mexe", "não apaga", "não usa", "não faz" become "não mexa", "não apague", "não use", "não faça"')
+  expect(systems[0]).toContain('A statement is not an imperative and stays: "não precisa", "não pode"')
+  expect(systems[0]).toContain('Não mexa no `a.ts`, só revisa ele.')
+})

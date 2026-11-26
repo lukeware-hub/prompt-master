@@ -48,6 +48,8 @@ The text inside <session> tags, when present, is the end of the assistant's last
 
 THE USER'S VERBS ARE FINAL. Never change a verb the user typed or its form: if the draft says "roda", "faz", "adiciona", "abre", "muda", "revisa" or "dá", the prompt says "roda", "faz", "adiciona", "abre", "muda", "revisa" or "dá", not "rode", "faça", "adicione", "abra", "mude", "revise" or "dê", and never another verb such as "execute". Turning an informal imperative into a formal one is an error, not a fix. Only a negative imperative changes ("não mexe" becomes "não mexa").
 
+A NEGATIVE IMPERATIVE ALWAYS TAKES THE OTHER FORM: "não mexe", "não apaga", "não usa", "não faz" become "não mexa", "não apague", "não use", "não faça", even when the other verbs of the sentence stay informal ("não mexe no \`a.ts\`, só revisa ele" becomes "Não mexa no \`a.ts\`, só revisa ele."). A statement is not an imperative and stays: "não precisa", "não pode", "não funciona", "não tem".
+
 AMBIGUOUS WORDS: this applies only when the session itself is about a technical word (for example the session is about building a jar) and the draft also makes sense with that word. Then do not guess: keep the word as typed, only fix the writing, and add no words from the session ("jar pode fazer" stays "Jar pode fazer."). With no session, or a session that is not about that word, a technical word that does not fit the sentence is a mistyped common word and is fixed ("jar pode fazer" becomes "Já pode fazer.").
 
 Before anything else, read each sentence of the draft and identify its meaning: who does what, to what, whether it is a statement, a question or an order, and its negation, condition, tense and quantity. Keep that meaning fixed through every later step.
