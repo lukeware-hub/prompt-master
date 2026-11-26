@@ -616,7 +616,7 @@ test('a tag written with a space inside is also kept from closing the draft', as
 
   await $.prompt.submit({ ...PROMPT, text: 'explain < /draft> please' })
 
-  expect(asked[0]).toBe('<draft>\nexplain <\u200b/draft> please\n</draft>')
+  expect(asked[0]).toBe('<draft>\nexplain <\u200b /draft> please\n</draft>')
 })
 
 test('a session that cannot read the saved choice still starts with rewriting on', async ($, on) => {
@@ -629,4 +629,49 @@ test('a session that cannot read the saved choice still starts with rewriting on
   await $.prompt.submit(PROMPT)
 
   expect(sent).toEqual(['Goal: fix the login bug in auth.ts.'])
+})
+
+test('a one-line rewrite about multiple choice is checked whole and still dropped when it copies the session', async ($, on) => {
+  const copy = 'Goal: test it. Context: the installed copy already has the fix and only works after a restart. Ask as multiple choice.'
+  const { sent } = engine(on, copy, {}, SESSION)
+
+  await $.prompt.submit({ ...PROMPT, text: 'restarted, test if it works' })
+
+  expect(sent).toEqual(['restarted, test if it works'])
+})
+
+test('a draft that talks about multiple choice does not hide the missing closing line', async ($, on) => {
+  const { sent } = engine(on, 'Adicione uma pergunta de múltipla escolha com a opção recomendada.', { language: 'pt-BR' })
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent[0]).toEndWith(CLOSING)
+})
+
+test('the closing line worded "escolha múltipla" is not doubled', async ($, on) => {
+  const own = 'Revise o `utils.ts`.\n\nSe faltar algo, pergunte em escolha múltipla, com uma opção recomendada.'
+  const { sent } = engine(on, own, { language: 'pt-PT' })
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual([own])
+})
+
+test('a short answer ending with a Spanish closing line is not dropped as a copy', async ($, on) => {
+  const question = [said('assistant', '¿Borro también la rama fix/login-retry? 1) borrarla 2) dejarla')]
+  const answer = 'Sí, borra la rama fix/login-retry.\n\nSi falta un dato, estudia primero el código y pregunta en opción múltiple, con una opción recomendada y el motivo.'
+  const { sent } = engine(on, answer, { language: 'es' }, question)
+
+  await $.prompt.submit({ ...PROMPT, text: 'sí, adelante' })
+
+  expect(sent).toEqual([answer])
+})
+
+test('a space the user typed after a less-than sign is kept', async ($, on) => {
+  const { asked, sent } = engine(on, 'If x <\u200b session limit.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'if x < session limit' })
+
+  expect(asked[0]).toBe('<draft>\nif x <\u200b session limit\n</draft>')
+  expect(sent).toEqual(['If x < session limit.'])
 })
