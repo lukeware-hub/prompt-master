@@ -1,6 +1,6 @@
 # Prompt Master
 
-Rewrites each prompt you send into a clearer, more specific and more complete one, using a fast model, before the assistant reads it.
+Rewrites each prompt you send into a clearer, more specific and more complete one, using the Sonnet model at medium effort, before the assistant reads it.
 
 The rewritten prompt follows four parts: goal, context, constraints and expected result. It ends with one short line (one sentence, at most 30 words) asking the assistant to study the code first and then ask any needed question as multiple choice, with one recommended option and the reason for it. It is written in the Language set in `/config` (for example `pt-BR`), with correct accents, or in your draft's language when none is set. It keeps your intent and never invents facts, files or requirements. If the rewrite fails or takes too long, your original prompt is sent as typed.
 
@@ -43,7 +43,7 @@ claude plugin install prompt-master --marketplace lukeware-hub/prompt-master
 
 ## Privacy
 
-Each prompt you send, and up to 2000 tokens from the end of the assistant's last reply, is sent to the fast model (haiku) through Claude Code's own model API to be rewritten. Nothing is sent to any other service. Turn rewriting off with the button or `/prompt-master` to stop it.
+Each prompt you send, and up to 2000 tokens from the end of the assistant's last reply, is sent to the Sonnet model (medium effort) through Claude Code's own model API to be rewritten. Nothing is sent to any other service. Turn rewriting off with the button or `/prompt-master` to stop it.
 
 ## Uninstall
 
