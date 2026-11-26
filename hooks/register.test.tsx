@@ -142,6 +142,19 @@ test('every rewrite is told to fix spelling, accents, grammar and punctuation, s
   expect(systems[0]).toContain('Never change code, paths, file names, identifiers')
 })
 
+test('every fix is told to keep the meaning, and the meaning is read first', async ($, on) => {
+  const { systems } = engine(on, undefined, {}, [], true, FIXED)
+
+  await $.prompt.submit(TYPO)
+
+  const rule = 'Every fix must preserve the original meaning of the sentence'
+  expect(systems[0]).toContain('identify its meaning')
+  expect(systems[0].indexOf('identify its meaning')).toBeLessThan(systems[0].indexOf('Build it from these parts'))
+  expect(systems[0]).toContain(rule)
+  expect(systems[0]).toContain('if the meaning differs in any way, undo that change')
+  expect(systems[1]).toContain(rule)
+})
+
 test('a rewrite cut short still sends the draft with its spelling fixed', async ($, on) => {
   const { sent, systems, asked } = engine(on, undefined, {}, [], true, FIXED)
 
