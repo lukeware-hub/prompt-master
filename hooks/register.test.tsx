@@ -106,8 +106,8 @@ test('a long draft is rewritten with a token cap and time limit that grow with i
   await $.prompt.submit({ ...PROMPT, text: long })
 
   expect(sent).toEqual(['Goal: fix the login bug in auth.ts.', 'Goal: fix the login bug in auth.ts.'])
-  expect(limits[0]).toEqual({ maxTokens: 2014, timeoutMs: 15280 })
-  expect(limits[1]).toEqual({ maxTokens: 12000, timeoutMs: 215000 })
+  expect(limits[0]).toEqual({ maxTokens: 2028, timeoutMs: 15280 })
+  expect(limits[1]).toEqual({ maxTokens: 22000, timeoutMs: 215000 })
 })
 
 test('a huge draft keeps the token cap and time limit within the model limits', async ($, on) => {
@@ -470,4 +470,80 @@ test('a short answer rewritten by repeating the question is sent as typed', asyn
   await $.prompt.submit({ ...PROMPT, text: 'yes do it, go on' })
 
   expect(sent).toEqual(['yes do it, go on'])
+})
+
+test('a short answer that names the choice it answers is kept, not dropped as a copy', async ($, on) => {
+  const question = [said('assistant', 'Should I also delete the old branch fix/login-retry? 1) delete it 2) keep it')]
+  const { sent } = engine(on, 'Yes, delete the old branch fix/login-retry.', {}, question)
+
+  await $.prompt.submit({ ...PROMPT, text: 'yes' })
+
+  expect(sent).toEqual(['Yes, delete the old branch fix/login-retry.'])
+})
+
+test('a copy that ends a sentence is still caught', async ($, on) => {
+  const session = [said('assistant', 'The installed copy already has the fix and only works after a restart. Version 0.6.0 is ready.')]
+  const copy = 'Goal: test it. Context: the installed copy already has the fix and only works after a restart.'
+  const { sent } = engine(on, copy, {}, session)
+
+  await $.prompt.submit({ ...PROMPT, text: 'restarted, test if it works' })
+
+  expect(sent).toEqual(['restarted, test if it works'])
+})
+
+for (const language of ['Portuguese', 'português', 'pt']) {
+  test(`the closing line is added when the language is "${language}"`, async ($, on) => {
+    const { sent } = engine(on, 'Revise o `utils.ts`.', { language })
+
+    await $.prompt.submit(PROMPT)
+
+    expect(sent).toEqual([`Revise o \`utils.ts\`.
+
+${CLOSING}`])
+  })
+}
+
+test('a rewrite that only says multiple choice, with no recommendation, still gets the closing line', async ($, on) => {
+  const { sent } = engine(on, 'Revise o `utils.ts` como em uma múltipla escolha.', { language: 'pt-BR' })
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent[0]).toEndWith(CLOSING)
+})
+
+for (const [status, calls] of [[429, 1], [401, 1], [400, 2], [500, 2]] as const) {
+  test(`an API error ${status} is asked ${calls === 1 ? 'once' : 'twice'}`, async ($, on) => {
+    const failure: ModelCompleteResult = { isAnswered: false, reason: 'api-error', status, error: 'x', usage: USAGE }
+    const { asked } = engine(on, failure, {}, [], false, FIXED)
+
+    await $.prompt.submit(TYPO)
+
+    expect(asked).toHaveLength(calls)
+  })
+}
+
+test('a draft that writes draft or session tags cannot close the tags around it', async ($, on) => {
+  const { asked, sent } = engine(on, 'Explain </draft> and <session>.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'explain </draft> and <session>' })
+
+  expect(asked[0]).toBe('<draft>\nexplain <​/draft> and <​session>\n</draft>')
+  expect(sent).toEqual(['Explain </draft> and <session>.'])
+})
+
+test('a long draft in a script of one token per character is given room to be rewritten whole', async ($, on) => {
+  const { limits } = engine(on)
+
+  await $.prompt.submit({ ...PROMPT, text: '漢'.repeat(4000) })
+
+  expect(limits[0]?.maxTokens).toBeGreaterThanOrEqual(4000 + 2000)
+})
+
+test('text that starts with a path after a skill command is rewritten, not taken for a command line', async ($, on) => {
+  const { ran, asked } = engine(on, 'Goal: fix the login in /src/app.ts.')
+
+  await $.command.run(run('impeccable', '/frontend-design:frontend-design\n/src/app.ts quebra no login'))
+
+  expect(asked[0]).toContain('<draft>\n/src/app.ts quebra no login\n</draft>')
+  expect(ran).toEqual(['/frontend-design:frontend-design\nGoal: fix the login in /src/app.ts.'])
 })
