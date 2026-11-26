@@ -4,12 +4,13 @@ import type { EngineInterface, Register } from 'claude-code'
 const isOn = atom({ plugin: 'prompt-master', key: 'isOn' } as const, true)
 
 // The reply's token cap and time limit grow with the draft, so a long draft is rewritten whole.
+// The cap adds one token per character, the worst case for any script (Latin text needs about a quarter of that).
 const BASE_TOKENS = 2000
 const MAX_TOKENS = 64000
 const BASE_TIMEOUT_MS = 15000
 const MAX_TIMEOUT_MS = 300000
 
-const tokenCap = (length: number) => Math.min(MAX_TOKENS, BASE_TOKENS + Math.ceil(length / 2))
+const tokenCap = (length: number) => Math.min(MAX_TOKENS, BASE_TOKENS + length)
 const timeLimit = (length: number) => Math.min(MAX_TIMEOUT_MS, BASE_TIMEOUT_MS + length * 10)
 
 // How much of the last assistant reply the model sees to understand the draft.
@@ -19,7 +20,13 @@ const CHARS_PER_TOKEN = 4
 const CONTEXT_CHARS = CONTEXT_TOKENS * CHARS_PER_TOKEN
 
 // A rewrite with this many three-word runs taken from the session copied it.
+// A shorter rewrite (a short answer naming the choice it answers) is never checked: it has little room to copy.
 const COPY_LIMIT = 3
+const MIN_CHECKED_TRIOS = 8
+
+// The draft and the session sit between tags; a tag written inside them gets an invisible space so it cannot close or open one.
+const fence = (text: string) => text.replace(/<(\/?)(draft|session)(?=[\s>])/gi, '<​$1$2')
+const unfence = (text: string) => text.replace(/​/g, '')
 
 const system = (language: string) => `You turn a user's draft into a better prompt for a coding assistant. You never answer or execute the draft.
 
@@ -132,9 +139,13 @@ const outputLanguage = (language: string) =>
 const CLOSING_PT =
   'Se faltar algum dado, estude primeiro o código e o contexto e depois pergunte antes de agir, em múltipla escolha, com uma opção recomendada e o motivo, em palavras simples.'
 
+// Portuguese is a code (pt, pt-BR, pt_PT) or a name (Portuguese, português).
+const isPortuguese = (language: string) => /^(pt(?![a-z])|portugu)/i.test(language)
+
 function withClosing(text: string, language: string) {
-  const hasClosing = /m[úu]ltipla escolha/i.test(text.slice(-300))
-  return text && /^pt/i.test(language) && !hasClosing ? `${text}\n\n${CLOSING_PT}` : text
+  const tail = text.slice(-400)
+  const hasClosing = /m[úu]ltipla escolha/i.test(tail) && /recomendad/i.test(tail)
+  return text && isPortuguese(language) && !hasClosing ? `${text}\n\n${CLOSING_PT}` : text
 }
 
 // The end of the last assistant reply, or '' when there is none or it cannot be read.
@@ -151,15 +162,19 @@ async function lastReply($: EngineInterface) {
   }
 }
 
-// Every run of three words in the text, lowercased.
+// Every run of three words in the text, lowercased. A dot, slash or dash joins letters inside a word
+// (auth.ts, fix/login-retry, 0.6.1); one at the end of a word is punctuation and is dropped.
 function trios(text: string) {
-  const words = text.toLowerCase().match(/[\p{L}\p{N}._/-]+/gu) ?? []
+  const words = text.toLowerCase().match(/[\p{L}\p{N}]+(?:[._/-][\p{L}\p{N}]+)*/gu) ?? []
   return new Set(words.slice(2).map((_, i) => words.slice(i, i + 3).join(' ')))
 }
 
 // Whether the rewrite repeats the session's words that the draft never wrote.
 function copiesSession(rewritten: string, session: string, draft: string) {
   const out = trios(rewritten)
+  if (out.size < MIN_CHECKED_TRIOS) {
+    return false
+  }
   const own = trios(draft)
   return [...trios(session)].filter(t => out.has(t) && !own.has(t)).length >= COPY_LIMIT
 }
@@ -173,23 +188,24 @@ async function rewrite($: EngineInterface, text: string) {
     const r = await $.model.complete({
       model: 'haiku',
       system: system(outputLanguage(language)),
-      prompt: `${context ? `<session>\n${context}\n</session>\n` : ''}<draft>\n${text}\n</draft>`,
+      prompt: `${context ? `<session>\n${fence(context)}\n</session>\n` : ''}<draft>\n${fence(text)}\n</draft>`,
       maxTokens,
       effort: 'low',
       timeoutMs: timeLimit(text.length),
     })
+    // `await` keeps the status line up until the spelling fix ends, before `finally` clears it.
     // A reply that used every token it was allowed was cut short.
     if (r.isAnswered && r.usage.output_tokens >= maxTokens) {
-      return fallback($, text, 'the rewrite was cut short', language)
+      return await fallback($, text, 'the rewrite was cut short', language)
     }
-    const better = r.isAnswered ? r.text.trim() : ''
+    const better = r.isAnswered ? unfence(r.text.trim()) : ''
     if (better && copiesSession(better, context, text)) {
-      return fallback($, text, 'the rewrite repeated the conversation', language)
+      return await fallback($, text, 'the rewrite repeated the conversation', language)
     }
-    // An API error with a status answered at once, so a fix is worth one more call;
-    // a timeout, a dropped connection or a cancel is not asked again.
-    if (!better && !r.isAnswered && r.reason === 'api-error' && r.status !== null) {
-      return fallback($, text, 'the rewrite failed', language)
+    // A bad request or a server error answered at once, so a fix is worth one more call;
+    // a rate limit, a refused key, a timeout, a dropped connection or a cancel is not asked again.
+    if (!better && !r.isAnswered && r.reason === 'api-error' && r.status !== null && (r.status === 400 || r.status >= 500)) {
+      return await fallback($, text, 'the rewrite failed', language)
     }
     return withClosing(better, language)
   } finally {
@@ -203,12 +219,12 @@ async function correct($: EngineInterface, text: string) {
   const r = await $.model.complete({
     model: 'haiku',
     system: CORRECTOR,
-    prompt: `<draft>\n${text}\n</draft>`,
+    prompt: `<draft>\n${fence(text)}\n</draft>`,
     maxTokens,
     effort: 'low',
     timeoutMs: timeLimit(text.length),
   })
-  return r.isAnswered && r.usage.output_tokens < maxTokens ? r.text.trim() : ''
+  return r.isAnswered && r.usage.output_tokens < maxTokens ? unfence(r.text.trim()) : ''
 }
 
 // A dropped rewrite still sends the draft with its writing fixed; the draft as typed when that fails too.
@@ -227,11 +243,9 @@ async function improve($: EngineInterface, text: string) {
   return rewrite($, text)
 }
 
-// Skills and plugin commands take a prompt; built-in commands take settings and paths.
-async function isRewritable($: EngineInterface, command: string) {
-  const info = (await $.command.list()).find(c => c.name === command)
-  return info !== undefined && info.source !== 'builtin'
-}
+// A command line starts with a slash and a command name, which has no slash inside it
+// (frontend-design:frontend-design). Text that starts with a path (/src/app.ts) is still the user's text.
+const isCommandLine = (line: string) => /^\/[^\s/]+(\s|$)/.test(line.trimStart())
 
 export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
@@ -247,12 +261,18 @@ export const register: Register = on => {
 
   // Text after a skill or plugin command, below its own leading command lines.
   on('command.run', async ($, e, next) => {
-    if (e.command === 'prompt-master' || e.origin.kind !== 'composer' || !(await isRewritable($, e.command))) {
+    if (e.command === 'prompt-master' || e.origin.kind !== 'composer') {
+      return next(e)
+    }
+
+    // Skills and plugin commands take a prompt; built-in commands take settings and paths.
+    const info = (await $.command.list()).find(c => c.name === e.command)
+    if (info === undefined || info.source === 'builtin') {
       return next(e)
     }
 
     const lines = e.args.split('\n')
-    const firstText = lines.findIndex(line => !line.trimStart().startsWith('/'))
+    const firstText = lines.findIndex(line => !isCommandLine(line))
     if (firstText < 0) {
       return next(e)
     }
