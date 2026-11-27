@@ -2,7 +2,7 @@
 
 Rewrites each prompt you send into a clearer, more specific and more complete one, using the Sonnet model at medium effort, before the assistant reads it.
 
-Every rewritten prompt, short or long, follows one fixed template: `Context:` (a short summary of the draft), `Goal:` (the improved, corrected prompt) and `Observation:` (a fixed sentence asking the assistant to read the code and context first and then ask any needed question as multiple choice, with one recommended option and the reason, in simple words). It is written in the Language set in `/config` (for example `pt-BR`), with correct accents, or in your draft's language when none is set. It keeps your intent and never invents facts, files or requirements. If the rewrite fails or takes too long, your original prompt is sent as typed.
+Every rewritten prompt, short or long, follows one fixed template: `Context:` (a short summary of the draft), `Goal:` (the improved, corrected prompt; it always says what you want the assistant to do, and the question itself is never printed) and `Observation:` (a fixed sentence asking the assistant to read the code and context first and then ask any needed question as multiple choice, with one recommended option and the reason, in simple words). It is written in the Language set in `/config` (for example `pt-BR`), with correct accents, or in your draft's language when none is set. It keeps your intent and never invents facts, files or requirements. If the rewrite fails or takes too long, your original prompt is sent as typed.
 
 ## Use
 
