@@ -9,7 +9,7 @@ const EFFORT = 'medium'
 
 // The reply's token cap and time limit grow with the draft, so a long draft is rewritten whole.
 // The cap adds one token per character, the worst case for any script (Latin text needs about a quarter of that).
-const BASE_TOKENS = 2000
+const BASE_TOKENS = 4000
 const MAX_TOKENS = 64000
 const BASE_TIMEOUT_MS = 30000
 const MAX_TIMEOUT_MS = 300000
@@ -25,14 +25,16 @@ const CONTEXT_CHARS = CONTEXT_TOKENS * CHARS_PER_TOKEN
 
 // A rewrite with this many three-word runs taken from the session copied it.
 // A shorter rewrite (a short answer naming the choice it answers) is never checked: it has little room to copy.
-// The closing line is left out of that count, since every rewrite ends with one.
+// Only the Goal is counted: the closing line is left out since every rewrite ends with one, and so is Context,
+// which may name the subject of a status question taken from the session.
 const COPY_LIMIT = 3
 const MIN_CHECKED_TRIOS = 8
 
 // The draft and the session sit between tags; a tag written inside them gets an invisible space so it cannot close or open one.
 // Only the space added here is taken out again, so an invisible character the user typed stays.
-const fence = (text: string) => text.replace(/<(\s*\/?\s*)(draft|session|rewrite)(?=[\s>/]|$)/gi, '<\u200b$1$2')
-const unfence = (text: string) => text.replace(/<\u200b(?=\s*\/?\s*(?:draft|session|rewrite))/gi, '<')
+// An invisible space the user typed there counts as part of the tag, so fence adds its own after it and unfence takes out one only.
+const fence = (text: string) => text.replace(/<([\s\u200b]*\/?[\s\u200b]*)(draft|session|rewrite)(?=[\s>/]|$)/gi, '<\u200b$1$2')
+const unfence = (text: string) => text.replace(/<\u200b(?=[\s\u200b]*\/?[\s\u200b]*(?:draft|session|rewrite)(?:[\s>/]|$))/gi, '<')
 
 // The model's reply as text to send, or '' when it holds only spaces and invisible characters.
 function readReply(text: string) {
@@ -269,9 +271,16 @@ const GOAL_LABEL = /^[^\S\n]*(?:[#>-]+[^\S\n]*)?\**Goal\**[^\S\n]*:/im
 const PLAIN_CONTEXT_PT = 'Texto do usuário com a escrita corrigida.'
 const PLAIN_CONTEXT = "The user's own text with its writing fixed."
 
+// What Context says when a short draft in the spelling-only fallback answers a question the assistant asked.
+const ANSWER_CONTEXT_PT = 'O usuário responde à pergunta do assistente.'
+const ANSWER_CONTEXT = "The user answers the assistant's question."
+
+// Whether the last reply ends by asking the user something: its last line has a question mark.
+const asksQuestion = (session: string) => (session.trimEnd().split('\n').at(-1) ?? '').includes('?')
+
 // Every output has the Context and Goal lines. A text that came without them (a model reply with no labels, or the
 // spelling-only fallback) gets them here, in code, so the template never depends on the model: the text becomes the Goal.
-function withTemplate(text: string, language: string) {
+function withTemplate(text: string, language: string, isAnswer = false) {
   const bare = withoutClosing(text)
   const core = bare.trim()
   if (!core || (CONTEXT_LABEL.test(core) && GOAL_LABEL.test(core))) {
@@ -279,7 +288,9 @@ function withTemplate(text: string, language: string) {
   }
   // The model's own closing line stays where it was.
   const closing = text.trimEnd().slice(bare.trimEnd().length)
-  const context = isPortuguese(language) ? PLAIN_CONTEXT_PT : PLAIN_CONTEXT
+  const context = isAnswer
+    ? isPortuguese(language) ? ANSWER_CONTEXT_PT : ANSWER_CONTEXT
+    : isPortuguese(language) ? PLAIN_CONTEXT_PT : PLAIN_CONTEXT
   const [first = '', ...rest] = core.split('\n')
   const body = rest.join('\n').trim()
   if (GOAL_LABEL.test(core)) {
@@ -292,12 +303,19 @@ function withTemplate(text: string, language: string) {
 }
 
 // The finished output: the template lines first, then the fixed Observation line in Portuguese.
-const finish = (text: string, language: string) => withClosing(withTemplate(text, language), language)
+const finish = (text: string, language: string, isAnswer = false) => withClosing(withTemplate(text, language, isAnswer), language)
 
 // The rewrite without its closing line.
+// A last line with the Observation label is the closing too, even when the model worded it so that closingLine misses it.
 function withoutClosing(text: string) {
-  const closing = closingLine(text)
+  const closing = closingLine(text) || observationLine(text)
   return closing ? text.trimEnd().slice(0, -closing.length) : text
+}
+
+function observationLine(text: string) {
+  const lines = text.trimEnd().split('\n')
+  const last = lines.at(-1) ?? ''
+  return lines.length > 1 && /^[^\S\n]*(?:[#>-]+[^\S\n]*)?\**Observation\**[^\S\n]*:/i.test(last) ? last : ''
 }
 
 // The Goal part of a rewrite: what follows the Goal label, without the closing line. The whole text when there is no label.
@@ -329,7 +347,7 @@ function trios(text: string) {
 
 // Whether the rewrite repeats the session's words that the draft never wrote.
 function copiesSession(rewritten: string, session: string, draft: string) {
-  const out = trios(withoutClosing(rewritten))
+  const out = trios(goalOf(rewritten))
   if (out.size < MIN_CHECKED_TRIOS) {
     return false
   }
@@ -351,12 +369,15 @@ const wordsOf = (text: string) => text.toLowerCase().match(/[\p{L}\p{N}]+(?:[._/
 const CODE_LIKE = /^(?:[\p{L}\p{N}]+(?:[._/][\p{L}\p{N}]+)+|\p{Ll}+\p{Lu}\p{L}*|\p{L}+\p{N}+\p{L}*|\p{N}+\p{L}+)$/u
 const MAX_CODE_TOKEN = 200
 
+// Words that look like code but are plain writing a rewrite may spell out: e.g, i.e, p.ex and ordinals (2º, 1ª).
+const NOT_CODE = /^(?:e\.g|i\.e|p\.ex|\p{N}+[ºª])$/iu
+
 // The code in a draft: whatever is between backticks, and the tokens that look like code.
 function codeIn(draft: string) {
   const spans = draft.split('`').filter((_, i) => i % 2 === 1)
   const tokens = draft.split(/\s+/).map(t => t.replace(/^[`"'([]+|[`"')\].,;:!?]+$/g, ''))
   const short = (t: string) => t.length > 0 && t.length <= MAX_CODE_TOKEN
-  return [...spans.filter(short), ...tokens.filter(t => short(t) && CODE_LIKE.test(t))]
+  return [...spans.filter(short), ...tokens.filter(t => short(t) && CODE_LIKE.test(t) && !NOT_CODE.test(t))]
 }
 
 // Whether a rewrite looks off enough to be checked once more, so most prompts cost one call only.
@@ -447,7 +468,8 @@ async function fallback($: EngineInterface, text: string, why: string, language:
   $.ui.status('✦ Prompt Master: fixing spelling…')
   const fixed = await correct($, text, context)
   $.ui.toast(`Prompt Master: ${why}, so ${fixed ? 'only the spelling and grammar were fixed' : 'the prompt was sent as typed'}`)
-  return finish(fixed, language)
+  // A short draft after a question is an answer to it, so its Context says so.
+  return finish(fixed, language, wordsOf(text).length <= SHORT_DRAFT_WORDS && asksQuestion(context))
 }
 
 // The rewrite of any text, short or long; '' when the plugin is off or there is no text.
@@ -584,6 +606,9 @@ export const register: Register = on => {
     const { Box, Button } = $.ui.resolve(e)
     const active = await read($, isOn)
     const names = new Set((await $.command.list()).map(command => command.name))
+    const bugFix = names.has('bug-fix-mode') && (await $.state.get(bugFixOn)).value === true
+    const imageInspect = names.has('image-inspect') && (await $.state.get(imageInspectOn)).value === true
+    const lukeVoice = names.has('luke-voice') && (await $.state.get(lukeVoiceOn)).value === true
 
     return (
       <Box flexDirection="column">
@@ -592,8 +617,8 @@ export const register: Register = on => {
           {names.has('bug-fix-mode') && (
             <Button
               key="prompt-master-bar-bug-fix"
-              label={`🐞 Bug Fix: ${(await $.state.get(bugFixOn)).value === true ? 'on' : 'off'}`}
-              variant={(await $.state.get(bugFixOn)).value === true ? 'primary' : 'secondary'}
+              label={`🐞 Bug Fix: ${bugFix ? 'on' : 'off'}`}
+              variant={bugFix ? 'primary' : 'secondary'}
               onPress={() => $.command.run({ command: 'bug-fix-mode' })}
             />
           )}
@@ -606,16 +631,16 @@ export const register: Register = on => {
           {names.has('image-inspect') && (
             <Button
               key="prompt-master-bar-image-inspect"
-              label={`🔍 Image Inspect: ${(await $.state.get(imageInspectOn)).value === true ? 'on' : 'off'}`}
-              variant={(await $.state.get(imageInspectOn)).value === true ? 'primary' : 'secondary'}
+              label={`🔍 Image Inspect: ${imageInspect ? 'on' : 'off'}`}
+              variant={imageInspect ? 'primary' : 'secondary'}
               onPress={() => $.command.run({ command: 'image-inspect' })}
             />
           )}
           {names.has('luke-voice') && (
             <Button
               key="prompt-master-bar-luke-voice"
-              label={`✦ luke-voice: ${(await $.state.get(lukeVoiceOn)).value === true ? 'on' : 'off'}`}
-              variant={(await $.state.get(lukeVoiceOn)).value === true ? 'primary' : 'secondary'}
+              label={`✦ luke-voice: ${lukeVoice ? 'on' : 'off'}`}
+              variant={lukeVoice ? 'primary' : 'secondary'}
               onPress={() => $.command.run({ command: 'luke-voice' })}
             />
           )}
@@ -625,8 +650,9 @@ export const register: Register = on => {
   })
 
   // Desktop: the bar above holds every mode, so the other mods' own rows are hidden there.
+  // During a survey the bar is not drawn, so the other mods' rows stay.
   on('ui.render', { component: 'AbovePromptList' }, async ($, e, next) => {
-    if (e.surface !== 'desktop') return next(e)
+    if (e.surface !== 'desktop' || e.props.hasSurvey) return next(e)
     return next({ ...e, props: { ...e.props, rows: e.props.rows.filter(row => row.plugin === 'prompt-master' || !BAR_PLUGINS.includes(row.plugin)) } })
   })
 }
