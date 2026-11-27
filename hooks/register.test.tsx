@@ -256,6 +256,8 @@ test('on the desktop the toggle leaves the footer and has a row above the prompt
     )
   })
 
+  on('command.list', () => ({ value: [] }))
+
   const footer = await $.ui.mount({ ...FOOTER, surface: 'desktop' })
   expect((await footer.findAll({ type: 'Button' })).map(item => item.key)).toEqual(['bug'])
   await footer.unmount()
@@ -295,6 +297,83 @@ test('the toggle in the row above the prompt turns rewriting off and on', async 
   await band.press({ key: 'prompt-master-toggle' })
   expect(await label()).toBe('✦ Prompt Master: off')
   await band.unmount()
+})
+
+const MODE_COMMANDS = ['bug-fix-mode', 'image-inspect', 'luke-voice'].map(name => ({ name, description: '', source: 'plugin' }))
+
+test('the bar above the prompt shows every installed mode side by side, Prompt Master second', async ($, on) => {
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  })
+  on('command.list', () => ({ value: MODE_COMMANDS }))
+
+  const band = await $.ui.mount({ ...BAND, surface: 'desktop' } as any)
+  expect((await band.findAll({ type: 'Button' })).map(item => item.props.label)).toEqual([
+    '🐞 Bug Fix: off',
+    '✦ Prompt Master: on',
+    '🔍 Image Inspect: off',
+    '✦ luke-voice: off',
+  ])
+  await band.unmount()
+})
+
+test("the bar shows another mode as on when that mod keeps isOn true", async ($, on) => {
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  })
+  on('command.list', () => ({ value: MODE_COMMANDS }))
+  on('state.get', (_$, e: any, next: any) => (e.plugin === 'bug-fix-mode' ? { value: { value: true, version: 1 } } : next(e)))
+
+  const band = await $.ui.mount({ ...BAND, surface: 'desktop' } as any)
+  expect((await band.find({ type: 'Button', key: 'prompt-master-bar-bug-fix' }))?.props.label).toBe('🐞 Bug Fix: on')
+  await band.unmount()
+})
+
+test('a mode that is not installed is left out of the bar', async ($, on) => {
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  })
+  on('command.list', () => ({ value: MODE_COMMANDS.slice(1, 2) }))
+
+  const band = await $.ui.mount({ ...BAND, surface: 'desktop' } as any)
+  expect((await band.findAll({ type: 'Button' })).map(item => item.key)).toEqual(['prompt-master-toggle', 'prompt-master-bar-image-inspect'])
+  await band.unmount()
+})
+
+test("a press on another mode's button runs that mod's command", async ($, on) => {
+  const ran: string[] = []
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  })
+  on('command.list', () => ({ value: MODE_COMMANDS }))
+  on('command.run', (_, e) => (ran.push(e.command), { text: '' }))
+
+  const band = await $.ui.mount({ ...BAND, surface: 'desktop' } as any)
+  await band.press({ key: 'prompt-master-bar-bug-fix' })
+  await band.press({ key: 'prompt-master-bar-luke-voice' })
+  expect(ran).toEqual(['bug-fix-mode', 'luke-voice'])
+  await band.unmount()
+})
+
+test("on the desktop the other mods' own rows above the prompt are hidden", async ($, on) => {
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  })
+  let kept: string[] = []
+  on('ui.render', { component: 'AbovePromptList' }, (_$, e) => {
+    kept = (e.props as any).rows.map((row: any) => row.plugin)
+    return { type: 'engine', ref: 0 } as any
+  })
+  const rows = ['git-inspector', 'bug-fix-mode', 'prompt-master', 'image-inspect', 'luke-voice'].map(plugin => ({ plugin, tree: { type: 'Box' } }))
+
+  const list = await $.ui.mount({ plugin: 'prompt-master', component: 'AbovePromptList', props: { rows, hasSurvey: false }, surface: 'desktop' } as any)
+  await list.unmount()
+  expect(kept).toEqual(['git-inspector', 'prompt-master'])
 })
 
 test('the terminal footer keeps the toggle after the other buttons', async ($, on) => {

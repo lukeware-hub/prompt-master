@@ -26,7 +26,7 @@ The rewritten prompt follows four parts: goal, context, constraints and expected
 ## Where the button is
 
 - Terminal: the `✦ Prompt Master` button is in the prompt footer, at the right, next to the model.
-- Claude Code Desktop: the button has a row of its own above the prompt box, with its full name. The Desktop footer shows only one mod button and folds the others into `...`, so the button is not in the footer there.
+- Claude Code Desktop: a mode bar above the prompt box holds, side by side, the toggles of Bug Fix, Prompt Master, Image Inspect and luke-voice, each one only when that mod is installed. A press on another mod's button runs that mod's own command (`/bug-fix-mode`, `/image-inspect`, `/luke-voice`), and its on or off is read from that mod. Those mods' own rows above the prompt are hidden there, and Prompt Master is not in the Desktop footer.
 - Claude Desktop has other screens, **Chat** and **Cowork**, that do not run Claude Code plugins, so the plugin does not appear there. Open a session on the **Code** tab to use it.
 
 ## Install

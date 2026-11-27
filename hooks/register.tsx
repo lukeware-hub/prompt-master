@@ -165,6 +165,14 @@ If the rewrite passes, return it exactly as it is. If not, return the rewrite co
 
 Output only the final text: no preface, no explanation, no quotes, no code fences, no <draft>, <rewrite> or <session> tags around it.`
 
+// The mode bar above the prompt on the desktop: the band stacks one row per mod, so this plugin draws every mode's
+// toggle in one row and hides the other mods' own rows. Each button runs that mod's slash command, which toggles it,
+// and shows the on or off the mod keeps under its isOn state. A mod whose command is not installed is left out.
+const bugFixOn = { plugin: 'bug-fix-mode', key: 'isOn' } as const
+const imageInspectOn = { plugin: 'image-inspect', key: 'isOn' } as const
+const lukeVoiceOn = { plugin: 'luke-voice', key: 'isOn' } as const
+const BAR_PLUGINS = ['bug-fix-mode', 'prompt-master', 'image-inspect', 'luke-voice']
+
 async function toggle($: EngineInterface) {
   await update($, isOn, v => !v)
   const active = await read($, isOn)
@@ -463,23 +471,55 @@ export const register: Register = on => {
     )
   })
 
-  // Desktop: the toggle's row above the prompt, in the band the other mods draw in. A mod may only draw
-  // its own buttons, so the other mods' stay in the footer.
+  // Desktop: the mode bar above the prompt (see BAR_PLUGINS).
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.surface !== 'desktop' || e.props.hasSurvey) return next(e)
     const { Box, Button } = $.ui.resolve(e)
     const active = await read($, isOn)
+    const names = new Set((await $.command.list()).map(command => command.name))
 
     return (
-      <Box>
+      <Box flexDirection="column">
         {await next(e)}
-        <Button
-          key="prompt-master-toggle"
-          label={active ? '✦ Prompt Master: on' : '✦ Prompt Master: off'}
-          variant={active ? 'primary' : 'secondary'}
-          onPress={() => toggle($)}
-        />
+        <Box flexDirection="row" flexWrap="wrap" justifyContent="flex-end" gap="xs">
+          {names.has('bug-fix-mode') && (
+            <Button
+              key="prompt-master-bar-bug-fix"
+              label={`🐞 Bug Fix: ${(await $.state.get(bugFixOn)).value === true ? 'on' : 'off'}`}
+              variant={(await $.state.get(bugFixOn)).value === true ? 'primary' : 'secondary'}
+              onPress={() => $.command.run({ command: 'bug-fix-mode' })}
+            />
+          )}
+          <Button
+            key="prompt-master-toggle"
+            label={active ? '✦ Prompt Master: on' : '✦ Prompt Master: off'}
+            variant={active ? 'primary' : 'secondary'}
+            onPress={() => toggle($)}
+          />
+          {names.has('image-inspect') && (
+            <Button
+              key="prompt-master-bar-image-inspect"
+              label={`🔍 Image Inspect: ${(await $.state.get(imageInspectOn)).value === true ? 'on' : 'off'}`}
+              variant={(await $.state.get(imageInspectOn)).value === true ? 'primary' : 'secondary'}
+              onPress={() => $.command.run({ command: 'image-inspect' })}
+            />
+          )}
+          {names.has('luke-voice') && (
+            <Button
+              key="prompt-master-bar-luke-voice"
+              label={`✦ luke-voice: ${(await $.state.get(lukeVoiceOn)).value === true ? 'on' : 'off'}`}
+              variant={(await $.state.get(lukeVoiceOn)).value === true ? 'primary' : 'secondary'}
+              onPress={() => $.command.run({ command: 'luke-voice' })}
+            />
+          )}
+        </Box>
       </Box>
     )
+  })
+
+  // Desktop: the bar above holds every mode, so the other mods' own rows are hidden there.
+  on('ui.render', { component: 'AbovePromptList' }, async ($, e, next) => {
+    if (e.surface !== 'desktop') return next(e)
+    return next({ ...e, props: { ...e.props, rows: e.props.rows.filter(row => row.plugin === 'prompt-master' || !BAR_PLUGINS.includes(row.plugin)) } })
   })
 }
