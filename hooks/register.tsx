@@ -405,10 +405,29 @@ function isCommandLine(line: string, names: Set<string>) {
   return name !== undefined && names.has(name)
 }
 
+// The terminal stamps the user's own Enter as `composer`. The Claude desktop app hosts the session as the SDK's
+// (or the bridge's) turn, or leaves it unclassified, so those count as the user's send only when the session
+// draws on an app surface: a `claude -p` run draws nowhere, and a scheduled or peer prompt has its own kind.
+const APP_ORIGINS = ['sdk', 'bridge', 'unclassified']
+
+async function isUserSend($: EngineInterface, origin: { kind: string }) {
+  if (origin.kind === 'composer') {
+    return true
+  }
+  if (!APP_ORIGINS.includes(origin.kind)) {
+    return false
+  }
+  try {
+    return (await $.session.surfaces()).some(surface => surface !== 'terminal')
+  } catch {
+    return false
+  }
+}
+
 export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     // A command's text is rewritten at command.run, where its arguments can still change.
-    if (e.command || e.isMeta || e.origin.kind !== 'composer') {
+    if (e.command || e.isMeta || !(await isUserSend($, e.origin))) {
       return next(e)
     }
 
@@ -419,7 +438,7 @@ export const register: Register = on => {
 
   // Text after a skill or plugin command, below its own leading command lines.
   on('command.run', async ($, e, next) => {
-    if (e.command === 'prompt-master' || e.origin.kind !== 'composer') {
+    if (e.command === 'prompt-master' || !(await isUserSend($, e.origin))) {
       return next(e)
     }
 

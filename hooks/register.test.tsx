@@ -1058,3 +1058,63 @@ test('a negative imperative always takes the other form and a statement is not o
   expect(systems[0]).toContain('A statement is not an imperative and stays: "não precisa", "não pode"')
   expect(systems[0]).toContain('Não mexa no `a.ts`, só revisa ele.')
 })
+
+test('a prompt sent from the desktop app (SDK origin on an app surface) is rewritten', async ($, on) => {
+  on('session.surfaces', () => ({ value: ['desktop'] }))
+  const { sent } = engine(on)
+
+  await $.prompt.submit({ ...PROMPT, origin: { kind: 'sdk' } })
+
+  expect(sent).toEqual(['Goal: fix the login bug in auth.ts.'])
+})
+
+test('a prompt from the bridge or an unclassified origin on an app surface is rewritten', async ($, on) => {
+  on('session.surfaces', () => ({ value: ['desktop'] }))
+  const { sent } = engine(on)
+
+  await $.prompt.submit({ ...PROMPT, origin: { kind: 'bridge' } })
+  await $.prompt.submit({ ...PROMPT, origin: { kind: 'unclassified' } })
+
+  expect(sent).toEqual(['Goal: fix the login bug in auth.ts.', 'Goal: fix the login bug in auth.ts.'])
+})
+
+test('an SDK prompt with no app surface (a claude -p run) is sent as typed', async ($, on) => {
+  on('session.surfaces', () => ({ value: [] }))
+  const { sent, asked } = engine(on)
+
+  await $.prompt.submit({ ...PROMPT, origin: { kind: 'sdk' } })
+
+  expect(asked).toEqual([])
+  expect(sent).toEqual([PROMPT.text])
+})
+
+test('an SDK prompt on the terminal surface only is sent as typed', async ($, on) => {
+  on('session.surfaces', () => ({ value: ['terminal'] }))
+  const { sent } = engine(on)
+
+  await $.prompt.submit({ ...PROMPT, origin: { kind: 'sdk' } })
+
+  expect(sent).toEqual([PROMPT.text])
+})
+
+test('a scheduled or task prompt on an app surface is never rewritten', async ($, on) => {
+  on('session.surfaces', () => ({ value: ['desktop'] }))
+  const { sent, asked } = engine(on)
+
+  await $.prompt.submit({ ...PROMPT, origin: { kind: 'scheduled-trigger' } })
+  await $.prompt.submit({ ...PROMPT, origin: { kind: 'task-notification' } })
+
+  expect(asked).toEqual([])
+  expect(sent).toEqual([PROMPT.text, PROMPT.text])
+})
+
+test('a skill command text sent from the desktop app is rewritten', async ($, on) => {
+  on('session.surfaces', () => ({ value: ['desktop'] }))
+  const { ran } = engine(on, 'Goal: align everything like the screenshot.')
+
+  await $.command.run({ ...run('impeccable', SKILL_ARGS), origin: { kind: 'sdk' } })
+
+  expect(ran).toEqual([
+    '/frontend-design:frontend-design\n/design-taste-frontend\nGoal: align everything like the screenshot.',
+  ])
+})

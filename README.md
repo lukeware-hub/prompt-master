@@ -17,7 +17,7 @@ Every rewritten prompt, short or long, follows one fixed template: `Context:` (a
 - Last check: when a rewrite of a short draft lost a word or gained too many, or changed a word of code (in backticks, `file.ts`, camelCase), it is read once more against the draft and fixed, with the same model, shown as `✦ Prompt Master: checking…`. Most prompts cost one call only; if the check fails, only the writing is fixed.
 - The spelling-only fix also reads the end of the last reply, only to understand which word you meant.
 - When the Language in `/config` is Portuguese (`pt`, `pt-BR`, `Portuguese`, `português`, `Brazilian Portuguese`), the plugin always writes the Observation line itself (replacing the model's wording), including in the spelling-only fallback. Other languages rely on the model.
-- Every prompt is rewritten, short or long; only empty prompts and the commands built into Claude Code are left as typed.
+- Every prompt is rewritten, short or long; only empty prompts and the commands built into Claude Code are left as typed. This works the same in the terminal and in Claude Desktop: a prompt sent from the app is treated as yours, while scheduled, background and other-session prompts and `claude -p` runs are left as typed.
 - After a skill or plugin command, such as `/impeccable`, only the text is rewritten; the command lines stay as typed.
 - The rewrite's token cap and time limit grow with the prompt's length, so a long paste is rewritten whole. If the rewrite still comes back cut short, the prompt is sent as typed, with a toast saying so.
 - While a prompt is being rewritten, the status line shows `✦ Prompt Master: rewriting…`.
