@@ -998,6 +998,24 @@ test('every output follows the Context, Goal and Observation template with the l
   expect(systems[0]).not.toContain('Objetivo, Contexto, Restrições, Resultado esperado')
 })
 
+test('Goal always answers what the user wants the assistant to do, without printing the question', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(systems[0]).toContain('Goal always answers the question "what does the user want me to do?"')
+  expect(systems[0]).toContain('Never write that question in the output')
+  expect(systems[0]).toContain('the final text that says what the user wants the assistant to do')
+})
+
+test('the last check knows Goal says what the user wants the assistant to do', async ($, on) => {
+  const { systems } = engine(on, 'Pode fazer.', {}, [], false, '', 'Já pode fazer.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'jar pode fazer' })
+
+  expect(systems[1]).toContain('says what the user wants the assistant to do (the question itself is never written in it)')
+})
+
 test('an informal imperative is kept as typed and only a negative one changes form', async ($, on) => {
   const { systems } = engine(on, undefined, {}, [], true, FIXED)
 
