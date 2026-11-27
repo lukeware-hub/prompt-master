@@ -1013,7 +1013,27 @@ test('the last check knows Goal says what the user wants the assistant to do', a
 
   await $.prompt.submit({ ...PROMPT, text: 'jar pode fazer' })
 
-  expect(systems[1]).toContain('says what the user wants the assistant to do (the question itself is never written in it)')
+  expect(systems[1]).toContain('says what the user wants the assistant to do (the question itself is never written in it')
+})
+
+test('Goal is never a question: a question draft becomes the action that answers it', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit({ ...PROMPT, text: 'o que é exatamente o campo `line`?' })
+
+  expect(systems[0]).toContain('GOAL IS NEVER A QUESTION: it is always a statement of what the assistant has to do')
+  expect(systems[0]).toContain('the sentence never ends with a question mark')
+  expect(systems[0]).toContain('Goal: Explica o que é exatamente o campo `line`.')
+  expect(systems[0]).toContain('Not: Goal: O que é exatamente o campo `line`?')
+  expect(systems[0]).toContain('Goal: Explica como funciona o login com token.')
+})
+
+test('the last check rewrites a Goal that is a question as an action', async ($, on) => {
+  const { systems } = engine(on, 'Pode fazer.', {}, [], false, '', 'Já pode fazer.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'jar pode fazer' })
+
+  expect(systems[1]).toContain('a Goal that is a question or ends with a question mark is rewritten as the action that answers it')
 })
 
 test('a status question becomes an investigate action and Context names its subject', async ($, on) => {
