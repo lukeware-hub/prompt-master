@@ -1016,6 +1016,25 @@ test('the last check knows Goal says what the user wants the assistant to do', a
   expect(systems[1]).toContain('says what the user wants the assistant to do (the question itself is never written in it)')
 })
 
+test('a status question becomes an investigate action and Context names its subject', async ($, on) => {
+  const { systems } = engine(on)
+
+  await $.prompt.submit({ ...PROMPT, text: 'o problema foi resolvido?' })
+
+  expect(systems[0]).toContain('the STATUS QUESTION')
+  expect(systems[0]).toContain('the verb is to investigate, check or verify, never to fix or implement')
+  expect(systems[0]).toContain('Goal: Investigar se já está tudo implementado e se os problemas com o plugin session-inspect foram resolvidos.')
+  expect(systems[0]).toContain('Not: Goal: O problema foi resolvido?')
+})
+
+test('the last check allows the subject of a status question', async ($, on) => {
+  const { systems } = engine(on, 'Pode fazer.', {}, [], false, '', 'Já pode fazer.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'jar pode fazer' })
+
+  expect(systems[1]).toContain('only asks whether earlier work is done, fixed or working')
+})
+
 test('an informal imperative is kept as typed and only a negative one changes form', async ($, on) => {
   const { systems } = engine(on, undefined, {}, [], true, FIXED)
 
