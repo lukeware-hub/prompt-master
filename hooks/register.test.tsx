@@ -155,19 +155,19 @@ test('every fix is told to keep the meaning, and the meaning is read first', asy
 
   const rule = 'Every fix must preserve the original meaning of the sentence'
   expect(systems[0]).toContain('identify its meaning')
-  expect(systems[0].indexOf('identify its meaning')).toBeLessThan(systems[0].indexOf('build it from these parts'))
+  expect(systems[0].indexOf('identify its meaning')).toBeLessThan(systems[0].indexOf('EVERY OUTPUT FOLLOWS THIS TEMPLATE'))
   expect(systems[0]).toContain(rule)
   expect(systems[0]).toContain('if the meaning differs in any way, undo that change')
   expect(systems[1]).toContain(rule)
 })
 
-test('a short or garbled draft stays short and gets no invented goal', async ($, on) => {
+test('a short or garbled draft gets a short Goal and no invented goal', async ($, on) => {
   const { systems } = engine(on)
 
   await $.prompt.submit(TYPO)
 
-  expect(systems[0]).toContain('becomes one or two clear sentences')
-  expect(systems[0]).toContain('The four parts are only for long drafts')
+  expect(systems[0]).toContain('becomes one or two clear sentences here')
+  expect(systems[0]).toContain('for a short draft and a long one alike')
   expect(systems[0]).toContain('work out the sentence the user most likely meant')
   expect(systems[0]).toContain('Never add a goal, an improvement, a reason or a request the user did not make')
   expect(systems[0]).toContain('na precisão teste, só revisar o utils.ts code')
@@ -420,23 +420,44 @@ test('the rewrite is written in the Language set in /config', async ($, on) => {
   expect(systems[0]).toContain('Write the final prompt in the language "pt-BR", even when the draft is written in another language')
 })
 
-const CLOSING = 'Se faltar algum dado, estude primeiro o código e o contexto e depois pergunte antes de agir, em múltipla escolha, com uma opção recomendada e o motivo, em palavras simples.'
+const CLOSING = 'Se faltar informação, leia primeiro o código e o contexto. Se ainda houver dúvida, pergunte antes de agir: dê opções de múltipla escolha, indique a recomendada e explique o motivo em palavras simples.'
+const CONFIRM = 'Digite "OK" para eu poder continuar!'
+// What every Portuguese output ends with: the Observation line, then the confirm line.
+const OBSERVATION = `Observation: ${CLOSING}\n${CONFIRM}`
 
-test('in Portuguese a rewrite that forgot the closing line gets it added', async ($, on) => {
-  const { sent } = engine(on, 'Revise o `utils.ts`.', { language: 'pt-BR' })
+test('in Portuguese a rewrite that already ends with both fixed lines is not given them twice', async ($, on) => {
+  const done = `Context: Revisão do \`utils.ts\`.\nGoal: Revise o \`utils.ts\`.\n${OBSERVATION}`
+  const { sent } = engine(on, done, { language: 'pt-BR' })
 
   await $.prompt.submit(PROMPT)
 
-  expect(sent).toEqual([`Revise o \`utils.ts\`.\n\n${CLOSING}`])
+  expect(sent).toEqual([done])
 })
 
-test('in Portuguese a rewrite that has its own closing line is not given a second one', async ($, on) => {
-  const own = 'Revise o `utils.ts`.\n\nSe faltar algo, estude o código e pergunte em múltipla escolha, com uma opção recomendada.'
+test('in Portuguese a confirm line worded differently by the model is replaced by the fixed one', async ($, on) => {
+  const own = `Context: Revisão do \`utils.ts\`.\nGoal: Revise o \`utils.ts\`.\nObservation: ${CLOSING}\nDiga OK para continuar.`
   const { sent } = engine(on, own, { language: 'pt-BR' })
 
   await $.prompt.submit(PROMPT)
 
-  expect(sent).toEqual([own])
+  expect(sent).toEqual([`Context: Revisão do \`utils.ts\`.\nGoal: Revise o \`utils.ts\`.\n${OBSERVATION}`])
+})
+
+test('in Portuguese a rewrite that forgot the Observation line gets it added as the last line', async ($, on) => {
+  const { sent } = engine(on, 'Context: Revisão do `utils.ts`.\nGoal: Revise o `utils.ts`.', { language: 'pt-BR' })
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual([`Context: Revisão do \`utils.ts\`.\nGoal: Revise o \`utils.ts\`.\n${OBSERVATION}`])
+})
+
+test('in Portuguese the Observation line is always the fixed sentence, so the model wording is replaced', async ($, on) => {
+  const own = 'Context: Revisão do `utils.ts`.\nGoal: Revise o `utils.ts`.\nObservation: Se faltar algo, estude o código e pergunte em múltipla escolha, com uma opção recomendada.'
+  const { sent } = engine(on, own, { language: 'pt-BR' })
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual([`Context: Revisão do \`utils.ts\`.\nGoal: Revise o \`utils.ts\`.\n${OBSERVATION}`])
 })
 
 test('other languages are left as the model wrote them', async ($, on) => {
@@ -447,12 +468,12 @@ test('other languages are left as the model wrote them', async ($, on) => {
   expect(sent).toEqual(['Review `utils.ts`.'])
 })
 
-test('in Portuguese the spelling-only fallback also gets the closing line', async ($, on) => {
+test('in Portuguese the spelling-only fallback also gets the Observation line', async ($, on) => {
   const { sent } = engine(on, undefined, { language: 'pt-BR' }, [], true, FIXED)
 
   await $.prompt.submit(TYPO)
 
-  expect(sent).toEqual([`${FIXED}\n\n${CLOSING}`])
+  expect(sent).toEqual([`${FIXED}\n${OBSERVATION}`])
 })
 
 test('programming words in English are only spell-fixed, never translated', async ($, on) => {
@@ -472,14 +493,16 @@ test('with no Language set the rewrite keeps the draft language', async ($, on) 
   expect(systems[0]).toContain("Write the final prompt in the draft's own language")
 })
 
-test('the rewrite ends by asking for missing facts as multiple choice with a recommendation', async ($, on) => {
+test('the rewrite ends with the fixed Observation sentence about missing facts, as multiple choice with a recommendation', async ($, on) => {
   const { systems } = engine(on)
 
   await $.prompt.submit(PROMPT)
 
-  expect(systems[0]).toContain('multiple-choice question')
-  expect(systems[0]).toContain('recommended')
-  expect(systems[0]).toContain('one closing line (one sentence)')
+  expect(systems[0]).toContain('Observation is always the same sentence, on its own line')
+  expect(systems[0]).toContain(CLOSING)
+  expect(systems[0]).toContain(`The last line of the output, with no label and nothing else on it, is always the same sentence: ${CONFIRM}`)
+  expect(systems[0]).toContain('dê opções de múltipla escolha, indique a recomendada')
+  expect(systems[0]).toContain('write that same sentence, with the same meaning and the same simple words, in the language of the prompt')
   expect(systems[0]).not.toContain('at most 30 words')
   expect(systems[0]).not.toContain('never add questions')
 })
@@ -580,9 +603,9 @@ test('a short answer to the last reply stays a short, explicit answer', async ($
 
   await $.prompt.submit(PROMPT)
 
-  expect(systems[0]).toContain('one or two sentences with none of the four parts')
+  expect(systems[0]).toContain('Goal is one or two sentences naming only the choice the session asked about')
   expect(systems[0]).toContain('<draft>\nyes, go ahead\n</draft>')
-  expect(systems[0]).toContain('Output: Yes, delete the old branch fix/login-retry.')
+  expect(systems[0]).toContain('Goal: Yes, delete the old branch fix/login-retry.')
 })
 
 test('the rewrite adds no facts from the session that the draft does not give', async ($, on) => {
@@ -591,9 +614,9 @@ test('the rewrite adds no facts from the session that the draft does not give', 
   await $.prompt.submit(PROMPT)
 
   expect(systems[0]).toContain('never copy facts, files, numbers or requirements from the session')
-  expect(systems[0]).toContain('only facts written in the draft, never ones from the session')
+  expect(systems[0]).toContain('It never holds a fact, file, task or request taken from the session')
   expect(systems[0]).toContain('<draft>\nnow add a test for the expired token case\n</draft>')
-  expect(systems[0]).toContain('Output: Goal: add a test for the expired token case.')
+  expect(systems[0]).toContain('Goal: Add a test for the expired token case.')
   expect(systems[0]).toContain('Not: Context: auth.ts changed, 12 tests pass, version 0.4.2 is ready.')
 })
 
@@ -644,14 +667,12 @@ test('a copy that ends a sentence is still caught', async ($, on) => {
 })
 
 for (const language of ['Portuguese', 'português', 'pt']) {
-  test(`the closing line is added when the language is "${language}"`, async ($, on) => {
+  test(`the Observation line is added when the language is "${language}"`, async ($, on) => {
     const { sent } = engine(on, 'Revise o `utils.ts`.', { language })
 
     await $.prompt.submit(PROMPT)
 
-    expect(sent).toEqual([`Revise o \`utils.ts\`.
-
-${CLOSING}`])
+    expect(sent).toEqual([`Revise o \`utils.ts\`.\n${OBSERVATION}`])
   })
 }
 
@@ -660,7 +681,7 @@ test('a rewrite that only says multiple choice, with no recommendation, still ge
 
   await $.prompt.submit(PROMPT)
 
-  expect(sent[0]).toEndWith(CLOSING)
+  expect(sent[0]).toEndWith(OBSERVATION)
 })
 
 for (const [status, calls] of [[429, 1], [401, 1], [400, 2], [500, 2]] as const) {
@@ -728,21 +749,21 @@ test('text that starts with a one-word path after a skill command is rewritten',
   expect(ran).toEqual(['Goal: the /api returns 500.'])
 })
 
-test('the closing line is not doubled when the model words it differently', async ($, on) => {
+test('the closing line is replaced, not doubled, when the model words it differently', async ($, on) => {
   const own = 'Revise o `utils.ts`.\n\nSe faltar algo, pergunte em múltiplas escolhas, com uma opção sugerida.'
   const { sent } = engine(on, own, { language: 'pt-BR' })
 
   await $.prompt.submit(PROMPT)
 
-  expect(sent).toEqual([own])
+  expect(sent).toEqual([`Revise o \`utils.ts\`.\n${OBSERVATION}`])
 })
 
-test('the closing line is added when the language is Brazilian Portuguese', async ($, on) => {
+test('the Observation line is added when the language is Brazilian Portuguese', async ($, on) => {
   const { sent } = engine(on, 'Revise o `utils.ts`.', { language: 'Brazilian Portuguese' })
 
   await $.prompt.submit(PROMPT)
 
-  expect(sent).toEqual([`Revise o \`utils.ts\`.\n\n${CLOSING}`])
+  expect(sent).toEqual([`Revise o \`utils.ts\`.\n${OBSERVATION}`])
 })
 
 test('a reply of only spaces and invisible characters sends the draft as typed', async ($, on) => {
@@ -795,16 +816,16 @@ test('a draft that talks about multiple choice does not hide the missing closing
 
   await $.prompt.submit(PROMPT)
 
-  expect(sent[0]).toEndWith(CLOSING)
+  expect(sent[0]).toEndWith(OBSERVATION)
 })
 
-test('the closing line worded "escolha múltipla" is not doubled', async ($, on) => {
+test('the closing line worded "escolha múltipla" is replaced, not doubled', async ($, on) => {
   const own = 'Revise o `utils.ts`.\n\nSe faltar algo, pergunte em escolha múltipla, com uma opção recomendada.'
   const { sent } = engine(on, own, { language: 'pt-PT' })
 
   await $.prompt.submit(PROMPT)
 
-  expect(sent).toEqual([own])
+  expect(sent).toEqual([`Revise o \`utils.ts\`.\n${OBSERVATION}`])
 })
 
 test('a short answer ending with a Spanish closing line is not dropped as a copy', async ($, on) => {
@@ -912,7 +933,7 @@ test('a technical word that does not fit the context is a typing mistake, and on
     expect(system).toContain('keep the technical word only when the sentence or the session is about that technology')
     expect(system).toContain('Start every sentence with a capital letter')
   }
-  expect(systems[0]).toContain('Output: Já pode fazer.')
+  expect(systems[0]).toContain('Goal: Já pode fazer.')
   expect(systems[0]).toContain('keeps every word that carries meaning')
 })
 
@@ -955,12 +976,17 @@ test('the last check knows that a short answer may name the choice it answers', 
   expect(systems[1]).toContain('may name the choice the session asked about; that is not an addition')
 })
 
-test('the labels of the four parts are written in the language of the prompt', async ($, on) => {
+test('every output follows the Context, Goal and Observation template with the labels in English', async ($, on) => {
   const { systems } = engine(on)
 
   await $.prompt.submit(PROMPT)
 
-  expect(systems[0]).toContain('Write the part labels in the same language as the prompt (in Portuguese: Objetivo, Contexto, Restrições, Resultado esperado)')
+  expect(systems[0]).toContain('three lines in this order, each starting with its label')
+  expect(systems[0]).toContain('written exactly in English (Context, Goal, Observation), whatever the language of the prompt')
+  expect(systems[0]).toContain('Context: <a short summary of what the draft is about>')
+  expect(systems[0]).toContain('Goal: <the improved and corrected prompt')
+  expect(systems[0]).toContain('Observation: <the fixed sentence given below>')
+  expect(systems[0]).not.toContain('Objetivo, Contexto, Restrições, Resultado esperado')
 })
 
 test('an informal imperative is kept as typed and only a negative one changes form', async ($, on) => {
@@ -992,40 +1018,35 @@ test('the user keeps their own verbs, with an example of an informal imperative 
   await $.prompt.submit(PROMPT)
 
   expect(systems[0]).toContain("Keep the user's own verbs and their form")
-  expect(systems[0]).toContain('Output: Roda os testes e faz o commit.')
-  expect(systems[0]).toContain('Not: Rode os testes e faça o commit.')
+  expect(systems[0]).toContain('Goal: Roda os testes e faz o commit.')
+  expect(systems[0]).toContain('Not: Goal: Rode os testes e faça o commit.')
   expect(systems[0]).toContain('an informal imperative is not a mistake')
 })
 
-test('in Portuguese the four labels left in English are written in Portuguese', async ($, on) => {
-  const long = 'Goal: revisar o login.\n\nContext:\n- o erro aparece no `auth.ts`.\n\n**Constraints:**\n- não mexa no `legacy.js`.\n\nExpected result: um resumo.'
-  const { sent } = engine(on, long, { language: 'pt-BR' })
+test('in Portuguese the labels stay in English and the text of the template is kept', async ($, on) => {
+  const template = 'Context: O erro aparece no `auth.ts`.\nGoal: Revisa o login e não mexa no `legacy.js`.'
+  const { sent } = engine(on, template, { language: 'pt-BR' })
 
-  await $.prompt.submit({ ...PROMPT, text: 'revisa o login, o erro aparece no `auth.ts`, nao mexa no `legacy.js` e quero um resumo' })
+  await $.prompt.submit({ ...PROMPT, text: 'revisa o login, o erro aparece no `auth.ts`, nao mexa no `legacy.js`' })
 
-  expect(sent[0]).toStartWith('Objetivo: revisar o login.')
-  expect(sent[0]).toContain('\n\nContexto:\n')
-  expect(sent[0]).toContain('**Restrições:**')
-  expect(sent[0]).toContain('\n\nResultado esperado: um resumo.')
-  expect(sent[0]).not.toMatch(/Goal|Constraints|Expected result/)
+  expect(sent).toEqual([`${template}\n${OBSERVATION}`])
 })
 
-test('in other languages and with no language the labels are left as the model wrote them', async ($, on) => {
-  const long = 'Goal: review the login.\n\nContext: the error is in `auth.ts`.'
-  const { sent } = engine(on, long, { language: 'en' })
+test('in other languages and with no language the template is left as the model wrote it', async ($, on) => {
+  const template = 'Context: The error is in `auth.ts`.\nGoal: Review the login.\nObservation: If a fact is missing, ask as multiple choice with one recommended option.'
+  const { sent } = engine(on, template, { language: 'en' })
 
   await $.prompt.submit({ ...PROMPT, text: 'review the login, the error is in `auth.ts`' })
 
-  expect(sent).toEqual([long])
+  expect(sent).toEqual([template])
 })
 
-test('a line that only starts with a label word inside the text is left alone in Portuguese', async ($, on) => {
-  const reply = 'Revise o `utils.ts`.\n\nO Context: do React muda.'
-  const { sent } = engine(on, reply, { language: 'pt-BR' })
+test('the short-draft check counts only the Goal words, not the Context line or the labels', async ($, on) => {
+  const { asked } = engine(on, 'Context: The user wants the login bug in `auth.ts` fixed.\nGoal: Fix the login bug in `auth.ts`.\nObservation: If a fact is missing, ask as multiple choice with one recommended option.')
 
   await $.prompt.submit(PROMPT)
 
-  expect(sent[0]).toContain('O Context: do React muda.')
+  expect(asked).toHaveLength(1)
 })
 
 test('the prompt says the user verbs are final and that a technical word is ambiguous only when the session is about it', async ($, on) => {
