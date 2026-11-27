@@ -31,25 +31,44 @@ Every rewritten prompt, short or long, follows one fixed template: `Context:` (a
 
 ## Install
 
-You need Claude Code installed.
+You need Claude Code installed. Pick your app:
 
-**In the Claude Code terminal**, type at the prompt:
+| App | Quick start |
+| --- | --- |
+| Claude Code terminal | `/plugin install prompt-master --marketplace lukeware-hub/prompt-master` |
+| Claude Desktop | **Code** tab → **+** → **Plugins** → **Add marketplace** → `lukeware-hub/prompt-master` |
 
-```
-/plugin install prompt-master --marketplace lukeware-hub/prompt-master
-```
+### Claude Code terminal
 
-1. Answer `y` to add the marketplace.
-2. Press Enter to install for your user (all your projects).
-3. Done: the `✦ Prompt Master` button appears in the prompt footer. If it does not show up, restart the Claude Code session.
+1. Open Claude Code and type at the prompt:
 
-**From a shell**, the same in one line. It adds the marketplace to your user settings without asking first:
+   ```
+   /plugin install prompt-master --marketplace lukeware-hub/prompt-master
+   ```
+
+2. Answer `y` to add the marketplace.
+3. Press Enter to install for your user (all your projects).
+4. Done: the `✦ Prompt Master` button appears in the prompt footer. If it does not show up, restart the Claude Code session.
+
+From a shell, the same in one line. It adds the marketplace to your user settings without asking first:
 
 ```
 claude plugin install prompt-master --marketplace lukeware-hub/prompt-master
 ```
 
-**In the Claude desktop app**: click **+** next to the prompt box, then **Plugins**, **Add marketplace**, type `lukeware-hub/prompt-master`, then **Add plugin**.
+### Claude Desktop
+
+1. Open the **Code** tab. **Chat** and **Cowork** do not run plugins.
+2. Click **+** next to the prompt box, then **Plugins**.
+3. Click **Add marketplace**, type `lukeware-hub/prompt-master`, then click **Add plugin**.
+4. Done: the `✦ Prompt Master` toggle appears in the mode bar above the prompt box. If it does not show up, restart the app.
+
+If you are in the same organization as the author, the plugin is also in your organization's library: open [this link](https://claude.ai/customize/plugins/plugin_01EaBSM5o94XnJjkhfdMdxrR) and add it from there.
+
+### Update
+
+- Terminal: `claude plugin update prompt-master`, then restart Claude Code.
+- Desktop: restart the app after a new version is published.
 
 ## Privacy
 
