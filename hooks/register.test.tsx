@@ -421,26 +421,15 @@ test('the rewrite is written in the Language set in /config', async ($, on) => {
 })
 
 const CLOSING = 'Se faltar informação, leia primeiro o código e o contexto. Se ainda houver dúvida, pergunte antes de agir: dê opções de múltipla escolha, indique a recomendada e explique o motivo em palavras simples.'
-const CONFIRM = 'Digite "OK" para eu poder continuar!'
-// What every Portuguese output ends with: the Observation line, then the confirm line.
-const OBSERVATION = `Observation: ${CLOSING}\n${CONFIRM}`
+const OBSERVATION = `Observation: ${CLOSING}`
 
-test('in Portuguese a rewrite that already ends with both fixed lines is not given them twice', async ($, on) => {
+test('in Portuguese a rewrite that already ends with the Observation line is not given it twice', async ($, on) => {
   const done = `Context: Revisão do \`utils.ts\`.\nGoal: Revise o \`utils.ts\`.\n${OBSERVATION}`
   const { sent } = engine(on, done, { language: 'pt-BR' })
 
   await $.prompt.submit(PROMPT)
 
   expect(sent).toEqual([done])
-})
-
-test('in Portuguese a confirm line worded differently by the model is replaced by the fixed one', async ($, on) => {
-  const own = `Context: Revisão do \`utils.ts\`.\nGoal: Revise o \`utils.ts\`.\nObservation: ${CLOSING}\nDiga OK para continuar.`
-  const { sent } = engine(on, own, { language: 'pt-BR' })
-
-  await $.prompt.submit(PROMPT)
-
-  expect(sent).toEqual([`Context: Revisão do \`utils.ts\`.\nGoal: Revise o \`utils.ts\`.\n${OBSERVATION}`])
 })
 
 test('in Portuguese a rewrite that forgot the Observation line gets it added as the last line', async ($, on) => {
@@ -498,9 +487,8 @@ test('the rewrite ends with the fixed Observation sentence about missing facts, 
 
   await $.prompt.submit(PROMPT)
 
-  expect(systems[0]).toContain('Observation is always the same sentence, on its own line')
+  expect(systems[0]).toContain('Observation is always the same sentence, on its own last line')
   expect(systems[0]).toContain(CLOSING)
-  expect(systems[0]).toContain(`The last line of the output, with no label and nothing else on it, is always the same sentence: ${CONFIRM}`)
   expect(systems[0]).toContain('dê opções de múltipla escolha, indique a recomendada')
   expect(systems[0]).toContain('write that same sentence, with the same meaning and the same simple words, in the language of the prompt')
   expect(systems[0]).not.toContain('at most 30 words')
