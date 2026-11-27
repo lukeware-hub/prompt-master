@@ -237,12 +237,49 @@ test('the footer keeps what is drawn beneath and adds the toggle', async ($, on)
     return <Text>engine</Text>
   })
 
-  for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await $.ui.mount({ ...FOOTER, surface })
+  const ui = await $.ui.mount({ ...FOOTER, surface: 'terminal' })
 
-    expect((await ui.find({ type: 'Text', text: /engine/ }))?.text).toBe('engine')
-    expect(await ui.find({ type: 'Button', key: 'prompt-master-toggle' })).toBeDefined()
-    await ui.unmount()
+  expect((await ui.find({ type: 'Text', text: /engine/ }))?.text).toBe('engine')
+  expect(await ui.find({ type: 'Button', key: 'prompt-master-toggle' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('on the desktop the footer is left alone and the toggle gets a row above the prompt', async ($, on) => {
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine</Text>
+  })
+
+  const footer = await $.ui.mount({ ...FOOTER, surface: 'desktop' })
+  expect((await footer.find({ type: 'Text', text: /engine/ }))?.text).toBe('engine')
+  expect(await footer.find({ type: 'Button', key: 'prompt-master-toggle' })).toBeUndefined()
+  await footer.unmount()
+
+  const band = await $.ui.mount({
+    plugin: 'prompt-master',
+    component: 'AbovePrompt',
+    props: { hasSurvey: false, isCollapsed: false },
+    surface: 'desktop',
+  } as any)
+  expect(await band.find({ type: 'Button', key: 'prompt-master-toggle' })).toBeDefined()
+  await band.unmount()
+})
+
+test('the row above the prompt is not drawn on the terminal or while a survey holds it', async ($, on) => {
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine</Text>
+  })
+
+  for (const [surface, hasSurvey] of [['terminal', false], ['desktop', true]] as const) {
+    const band = await $.ui.mount({
+      plugin: 'prompt-master',
+      component: 'AbovePrompt',
+      props: { hasSurvey, isCollapsed: false },
+      surface,
+    } as any)
+    expect(await band.find({ type: 'Button', key: 'prompt-master-toggle' })).toBeUndefined()
+    await band.unmount()
   }
 })
 
