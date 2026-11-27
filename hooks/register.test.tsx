@@ -74,7 +74,7 @@ test('a short draft is rewritten from inside draft tags', async ($, on) => {
 
   await $.prompt.submit(PROMPT)
 
-  expect(sent).toEqual(['Goal: fix the login bug in auth.ts.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: fix the login bug in auth.ts.`])
   expect(asked[0]).toContain('<draft>\nfix the login bug in auth.ts\n</draft>')
 })
 
@@ -92,7 +92,7 @@ test('a one-word draft is rewritten', async ($, on) => {
   await $.prompt.submit({ ...PROMPT, text: 'ok' })
 
   expect(asked).toHaveLength(1)
-  expect(sent).toEqual(['Ok.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: Ok.`])
 })
 
 test('a draft of only spaces is sent as typed without asking the model', async ($, on) => {
@@ -111,7 +111,7 @@ test('a long draft is rewritten with a token cap and time limit that grow with i
   await $.prompt.submit(PROMPT)
   await $.prompt.submit({ ...PROMPT, text: long })
 
-  expect(sent).toEqual(['Goal: fix the login bug in auth.ts.', 'Goal: fix the login bug in auth.ts.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: fix the login bug in auth.ts.`, `${PLAIN}\nGoal: fix the login bug in auth.ts.`])
   expect(limits[0]).toEqual({ maxTokens: 2028, timeoutMs: 30280 })
   expect(limits[1]).toEqual({ maxTokens: 22000, timeoutMs: 230000 })
 })
@@ -134,6 +134,9 @@ test('a rewrite cut short at its token cap sends the draft as typed when the spe
 
 const TYPO = { ...PROMPT, text: 'pode cotinuar, mas nao mexe no `authService.ts`' }
 const FIXED = 'Pode continuar, mas não mexa no `authService.ts`.'
+// What Context says when the text came without a Context line (the spelling fix or a reply with no labels).
+const PLAIN = "Context: The user's own text with its writing fixed."
+const PLAIN_PT = 'Context: Texto do usuário com a escrita corrigida.'
 
 test('every rewrite is told to fix spelling, accents, grammar and punctuation, short drafts included', async ($, on) => {
   const { systems } = engine(on)
@@ -178,7 +181,7 @@ test('a rewrite cut short still sends the draft with its spelling fixed', async 
 
   await $.prompt.submit(TYPO)
 
-  expect(sent).toEqual([FIXED])
+  expect(sent).toEqual([`${PLAIN}\nGoal: ${FIXED}`])
   expect(systems[1]).toStartWith('You fix the writing')
   expect(asked[1]).toBe(`<draft>\n${TYPO.text}\n</draft>`)
 })
@@ -188,7 +191,7 @@ test('a rewrite that repeats the conversation still sends the draft with its spe
 
   await $.prompt.submit(TYPO)
 
-  expect(sent).toEqual([FIXED])
+  expect(sent).toEqual([`${PLAIN}\nGoal: ${FIXED}`])
 })
 
 test('a rewrite refused by the API still sends the draft with its spelling fixed', async ($, on) => {
@@ -197,7 +200,7 @@ test('a rewrite refused by the API still sends the draft with its spelling fixed
 
   await $.prompt.submit(TYPO)
 
-  expect(sent).toEqual([FIXED])
+  expect(sent).toEqual([`${PLAIN}\nGoal: ${FIXED}`])
 })
 
 test('a rewrite that timed out is not asked again and the draft is sent as typed', async ($, on) => {
@@ -393,7 +396,7 @@ test('on the desktop the message bubble shows the rewrite that was sent, not the
   const terminal = await $.ui.mount({ plugin: 'prompt-master', component: 'UserMessage', props, surface: 'terminal' } as any)
   await terminal.unmount()
 
-  expect(shown).toBe('Goal: fix the login bug in auth.ts.')
+  expect(shown).toBe(`${PLAIN}\nGoal: fix the login bug in auth.ts.`)
   expect(shownOnTerminal).toBe(PROMPT.text)
 })
 
@@ -475,7 +478,7 @@ test('other languages are left as the model wrote them', async ($, on) => {
 
   await $.prompt.submit(PROMPT)
 
-  expect(sent).toEqual(['Review `utils.ts`.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: Review \`utils.ts\`.`])
 })
 
 test('in Portuguese the spelling-only fallback also gets the Observation line', async ($, on) => {
@@ -483,7 +486,7 @@ test('in Portuguese the spelling-only fallback also gets the Observation line', 
 
   await $.prompt.submit(TYPO)
 
-  expect(sent).toEqual([`${FIXED}\n${OBSERVATION}`])
+  expect(sent).toEqual([`${PLAIN_PT}\nGoal: ${FIXED}\n${OBSERVATION}`])
 })
 
 test('programming words in English are only spell-fixed, never translated', async ($, on) => {
@@ -523,7 +526,7 @@ test('the text after a skill command is rewritten and the command lines are kept
 
   expect(asked[0]).toContain('<draft>\neta tudo desalinhado temq ue fira tudo alinha igai a esse\n</draft>')
   expect(ran).toEqual([
-    '/frontend-design:frontend-design\n/design-taste-frontend\nGoal: align everything like the screenshot.',
+    `/frontend-design:frontend-design\n/design-taste-frontend\n${PLAIN}\nGoal: align everything like the screenshot.`,
   ])
 })
 
@@ -553,7 +556,7 @@ test('a skill command with short text is rewritten', async ($, on) => {
   await $.command.run(run('impeccable', 'fix it'))
 
   expect(asked).toHaveLength(1)
-  expect(ran).toEqual(['Goal: fix it.'])
+  expect(ran).toEqual([`${PLAIN}\nGoal: fix it.`])
 })
 
 test('a failed rewrite runs the skill command as typed', async ($, on) => {
@@ -594,7 +597,7 @@ test('with no assistant reply only the draft is sent', async ($, on) => {
   await $.prompt.submit(PROMPT)
 
   expect(asked[0]).toBe('<draft>\nfix the login bug in auth.ts\n</draft>')
-  expect(sent).toEqual(['Goal: fix the login bug in auth.ts.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: fix the login bug in auth.ts.`])
 })
 
 test('the session context may only clarify the draft, never add facts', async ($, on) => {
@@ -644,7 +647,7 @@ test('a rewrite that only names the subject from the session is kept', async ($,
 
   await $.prompt.submit({ ...PROMPT, text: 'restarted, test if it works' })
 
-  expect(sent).toEqual(['I restarted. Test if version 0.6.0 works now.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: I restarted. Test if version 0.6.0 works now.`])
 })
 
 test('a short answer rewritten by repeating the question is sent as typed', async ($, on) => {
@@ -662,7 +665,7 @@ test('a short answer that names the choice it answers is kept, not dropped as a 
 
   await $.prompt.submit({ ...PROMPT, text: 'yes' })
 
-  expect(sent).toEqual(['Yes, delete the old branch fix/login-retry.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: Yes, delete the old branch fix/login-retry.`])
 })
 
 test('a copy that ends a sentence is still caught', async ($, on) => {
@@ -681,7 +684,7 @@ for (const language of ['Portuguese', 'português', 'pt']) {
 
     await $.prompt.submit(PROMPT)
 
-    expect(sent).toEqual([`Revise o \`utils.ts\`.\n${OBSERVATION}`])
+    expect(sent).toEqual([`${PLAIN_PT}\nGoal: Revise o \`utils.ts\`.\n${OBSERVATION}`])
   })
 }
 
@@ -710,7 +713,7 @@ test('a draft that writes draft or session tags cannot close the tags around it'
   await $.prompt.submit({ ...PROMPT, text: 'explain </draft> and <session>' })
 
   expect(asked[0]).toBe('<draft>\nexplain <\u200b/draft> and <\u200bsession>\n</draft>')
-  expect(sent).toEqual(['Explain </draft> and <session>.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: Explain </draft> and <session>.`])
 })
 
 test('a long draft in a script of one token per character is given room to be rewritten whole', async ($, on) => {
@@ -727,7 +730,7 @@ test('text that starts with a path after a skill command is rewritten, not taken
   await $.command.run(run('impeccable', '/frontend-design:frontend-design\n/src/app.ts quebra no login'))
 
   expect(asked[0]).toContain('<draft>\n/src/app.ts quebra no login\n</draft>')
-  expect(ran).toEqual(['/frontend-design:frontend-design\nGoal: fix the login in /src/app.ts.'])
+  expect(ran).toEqual([`/frontend-design:frontend-design\n${PLAIN}\nGoal: fix the login in /src/app.ts.`])
 })
 
 test('a short answer that ends with the closing line is not dropped for the closing line', async ($, on) => {
@@ -737,7 +740,7 @@ test('a short answer that ends with the closing line is not dropped for the clos
 
   await $.prompt.submit({ ...PROMPT, text: 'yes, go ahead' })
 
-  expect(sent).toEqual([answer])
+  expect(sent).toEqual([`${PLAIN}\nGoal: ${answer}`])
 })
 
 test('a long rewrite that copies the session before its closing line is still dropped', async ($, on) => {
@@ -755,7 +758,7 @@ test('text that starts with a one-word path after a skill command is rewritten',
   await $.command.run(run('impeccable', '/api returns 500'))
 
   expect(asked[0]).toContain('<draft>\n/api returns 500\n</draft>')
-  expect(ran).toEqual(['Goal: the /api returns 500.'])
+  expect(ran).toEqual([`${PLAIN}\nGoal: the /api returns 500.`])
 })
 
 test('the closing line is replaced, not doubled, when the model words it differently', async ($, on) => {
@@ -764,7 +767,7 @@ test('the closing line is replaced, not doubled, when the model words it differe
 
   await $.prompt.submit(PROMPT)
 
-  expect(sent).toEqual([`Revise o \`utils.ts\`.\n${OBSERVATION}`])
+  expect(sent).toEqual([`${PLAIN_PT}\nGoal: Revise o \`utils.ts\`.\n${OBSERVATION}`])
 })
 
 test('the Observation line is added when the language is Brazilian Portuguese', async ($, on) => {
@@ -772,7 +775,7 @@ test('the Observation line is added when the language is Brazilian Portuguese', 
 
   await $.prompt.submit(PROMPT)
 
-  expect(sent).toEqual([`Revise o \`utils.ts\`.\n${OBSERVATION}`])
+  expect(sent).toEqual([`${PLAIN_PT}\nGoal: Revise o \`utils.ts\`.\n${OBSERVATION}`])
 })
 
 test('a reply of only spaces and invisible characters sends the draft as typed', async ($, on) => {
@@ -788,7 +791,7 @@ test('an invisible character the user typed is kept', async ($, on) => {
 
   await $.prompt.submit(PROMPT)
 
-  expect(sent).toEqual(['Explain a\u200bb.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: Explain a​b.`])
 })
 
 test('a tag written with a space inside is also kept from closing the draft', async ($, on) => {
@@ -808,7 +811,7 @@ test('a session that cannot read the saved choice still starts with rewriting on
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.prompt.submit(PROMPT)
 
-  expect(sent).toEqual(['Goal: fix the login bug in auth.ts.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: fix the login bug in auth.ts.`])
 })
 
 test('a one-line rewrite about multiple choice is checked whole and still dropped when it copies the session', async ($, on) => {
@@ -834,7 +837,7 @@ test('the closing line worded "escolha múltipla" is replaced, not doubled', asy
 
   await $.prompt.submit(PROMPT)
 
-  expect(sent).toEqual([`Revise o \`utils.ts\`.\n${OBSERVATION}`])
+  expect(sent).toEqual([`${PLAIN_PT}\nGoal: Revise o \`utils.ts\`.\n${OBSERVATION}`])
 })
 
 test('a short answer ending with a Spanish closing line is not dropped as a copy', async ($, on) => {
@@ -844,7 +847,7 @@ test('a short answer ending with a Spanish closing line is not dropped as a copy
 
   await $.prompt.submit({ ...PROMPT, text: 'sí, adelante' })
 
-  expect(sent).toEqual([answer])
+  expect(sent).toEqual([`${PLAIN}\nGoal: ${answer}`])
 })
 
 test('a space the user typed after a less-than sign is kept', async ($, on) => {
@@ -853,7 +856,7 @@ test('a space the user typed after a less-than sign is kept', async ($, on) => {
   await $.prompt.submit({ ...PROMPT, text: 'if x < session limit' })
 
   expect(asked[0]).toBe('<draft>\nif x <\u200b session limit\n</draft>')
-  expect(sent).toEqual(['If x < session limit.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: If x < session limit.`])
 })
 
 test('the rewrite and the spelling fallback both use sonnet with medium effort', async ($, on) => {
@@ -875,7 +878,7 @@ test('a short draft whose rewrite lost a word is checked again and the checked t
   expect(asked).toHaveLength(2)
   expect(systems[1]).toStartWith('You check the rewrite')
   expect(asked[1]).toBe('<draft>\njar pode fazer\n</draft>\n<rewrite>\nPode fazer.\n</rewrite>')
-  expect(sent).toEqual(['Já pode fazer.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: Já pode fazer.`])
 })
 
 test('a rewrite that keeps the size of the draft costs one call only', async ($, on) => {
@@ -900,7 +903,7 @@ test('a short draft that gained words is checked again', async ($, on) => {
   await $.prompt.submit({ ...PROMPT, text: 'jar pode fazer' })
 
   expect(asked).toHaveLength(2)
-  expect(sent).toEqual(['Já pode fazer.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: Já pode fazer.`])
 })
 
 test('a final check that fails sends the draft with its spelling fixed', async ($, on) => {
@@ -910,7 +913,7 @@ test('a final check that fails sends the draft with its spelling fixed', async (
 
   expect(asked).toHaveLength(3)
   expect(systems[2]).toStartWith('You fix the writing')
-  expect(sent).toEqual(['Já pode fazer.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: Já pode fazer.`])
 })
 
 test('a final check that copies the conversation sends the draft with its spelling fixed', async ($, on) => {
@@ -919,7 +922,7 @@ test('a final check that copies the conversation sends the draft with its spelli
 
   await $.prompt.submit({ ...PROMPT, text: 'restarted, test if it works' })
 
-  expect(sent).toEqual(['Restarted, test if it works.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: Restarted, test if it works.`])
 })
 
 test('the spelling fix sees the end of the last reply to understand the draft', async ($, on) => {
@@ -974,7 +977,7 @@ test('a short answer that names the choice it answers costs one call only', asyn
   await $.prompt.submit({ ...PROMPT, text: 'yes' })
 
   expect(asked).toHaveLength(1)
-  expect(sent).toEqual(['Yes, delete the old branch fix/login-retry.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: Yes, delete the old branch fix/login-retry.`])
 })
 
 test('the last check knows that a short answer may name the choice it answers', async ($, on) => {
@@ -1143,7 +1146,7 @@ test('a prompt sent from the desktop app (SDK origin on an app surface) is rewri
 
   await $.prompt.submit({ ...PROMPT, origin: { kind: 'sdk' } })
 
-  expect(sent).toEqual(['Goal: fix the login bug in auth.ts.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: fix the login bug in auth.ts.`])
 })
 
 test('a prompt from the bridge or an unclassified origin on an app surface is rewritten', async ($, on) => {
@@ -1153,7 +1156,7 @@ test('a prompt from the bridge or an unclassified origin on an app surface is re
   await $.prompt.submit({ ...PROMPT, origin: { kind: 'bridge' } })
   await $.prompt.submit({ ...PROMPT, origin: { kind: 'unclassified' } })
 
-  expect(sent).toEqual(['Goal: fix the login bug in auth.ts.', 'Goal: fix the login bug in auth.ts.'])
+  expect(sent).toEqual([`${PLAIN}\nGoal: fix the login bug in auth.ts.`, `${PLAIN}\nGoal: fix the login bug in auth.ts.`])
 })
 
 test('an SDK prompt with no app surface (a claude -p run) is sent as typed', async ($, on) => {
@@ -1193,6 +1196,47 @@ test('a skill command text sent from the desktop app is rewritten', async ($, on
   await $.command.run({ ...run('impeccable', SKILL_ARGS), origin: { kind: 'sdk' } })
 
   expect(ran).toEqual([
-    '/frontend-design:frontend-design\n/design-taste-frontend\nGoal: align everything like the screenshot.',
+    `/frontend-design:frontend-design\n/design-taste-frontend\n${PLAIN}\nGoal: align everything like the screenshot.`,
   ])
+})
+
+test('a reply with no labels always gets the Context and Goal lines, in Portuguese too', async ($, on) => {
+  const { sent } = engine(on, 'Explica o que é exatamente o campo `line`.', { language: 'pt-BR' })
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual([`${PLAIN_PT}\nGoal: Explica o que é exatamente o campo \`line\`.\n${OBSERVATION}`])
+})
+
+test('a reply that has only the Goal line gets a Context line before it', async ($, on) => {
+  const { sent } = engine(on, 'Goal: Explain the `line` field.')
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual([`${PLAIN}\nGoal: Explain the \`line\` field.`])
+})
+
+test('a reply that has only the Context line gets its text as the Goal', async ($, on) => {
+  const { sent } = engine(on, 'Context: The `line` field.\nExplain the `line` field.')
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual(['Context: The `line` field.\nGoal: Explain the `line` field.'])
+})
+
+test('a reply that already has Context and Goal is not changed', async ($, on) => {
+  const full = 'Context: The login bug is in `auth.ts`.\nGoal: Fix the login bug in `auth.ts`.'
+  const { sent } = engine(on, full)
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual([full])
+})
+
+test('the spelling-only fallback in Portuguese keeps the Context, Goal and Observation lines', async ($, on) => {
+  const { sent } = engine(on, undefined, { language: 'pt-BR' }, [], true, 'Ok, pode seguir, com versão e commit.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'ok pode seguir com versao e comit' })
+
+  expect(sent).toEqual([`${PLAIN_PT}\nGoal: Ok, pode seguir, com versão e commit.\n${OBSERVATION}`])
 })
