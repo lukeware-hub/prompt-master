@@ -280,6 +280,36 @@ test('there is no row above the prompt on any surface', async ($, on) => {
   }
 })
 
+test('on the desktop the widget opens at session start and holds the full toggle', async ($, on) => {
+  const opened: unknown[] = []
+  on('ui.open', (_$, e) => {
+    opened.push(e)
+    return { value: { isPlaced: true } }
+  })
+  mock.store(on, {})
+  engine(on)
+
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(opened).toEqual([expect.objectContaining({ id: 'prompt-master-widget', placement: 'widget' })])
+
+  const ui = await $.ui.mount({ plugin: 'prompt-master', component: 'Pane', requestId: 'prompt-master-widget', props: {}, surface: 'desktop' } as any)
+  expect((await ui.find({ type: 'Button', key: 'prompt-master-toggle' }))?.props.label).toBe('✦ Prompt Master: on')
+  await ui.unmount()
+})
+
+test('the terminal opens no widget', async ($, on) => {
+  const opened: unknown[] = []
+  on('ui.open', (_$, e) => {
+    opened.push(e)
+    return { value: { isPlaced: true } }
+  })
+  mock.store(on, {})
+  engine(on)
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  expect(opened).toEqual([])
+})
+
 // Another mod's footer Button keyed "toggle" took this one's clicks.
 test('the footer toggle has a key no other mod uses, and a press turns it off and on', async ($, on) => {
   on('ui.render', ($, e) => {
