@@ -261,6 +261,39 @@ function withClosing(text: string, language: string) {
   return text && isPortuguese(language) ? `${withoutClosing(text).trimEnd()}\nObservation: ${CLOSING_PT}` : text
 }
 
+// Context and Goal are labels at the start of a line, in any case, with or without markdown marks.
+const CONTEXT_LABEL = /^[^\S\n]*(?:[#>-]+[^\S\n]*)?\**Context\**[^\S\n]*:/im
+const GOAL_LABEL = /^[^\S\n]*(?:[#>-]+[^\S\n]*)?\**Goal\**[^\S\n]*:/im
+
+// What Context says when the text came without one (a dropped rewrite keeps only the user's words with the writing fixed).
+const PLAIN_CONTEXT_PT = 'Texto do usuário com a escrita corrigida.'
+const PLAIN_CONTEXT = "The user's own text with its writing fixed."
+
+// Every output has the Context and Goal lines. A text that came without them (a model reply with no labels, or the
+// spelling-only fallback) gets them here, in code, so the template never depends on the model: the text becomes the Goal.
+function withTemplate(text: string, language: string) {
+  const bare = withoutClosing(text)
+  const core = bare.trim()
+  if (!core || (CONTEXT_LABEL.test(core) && GOAL_LABEL.test(core))) {
+    return text
+  }
+  // The model's own closing line stays where it was.
+  const closing = text.trimEnd().slice(bare.trimEnd().length)
+  const context = isPortuguese(language) ? PLAIN_CONTEXT_PT : PLAIN_CONTEXT
+  const [first = '', ...rest] = core.split('\n')
+  const body = rest.join('\n').trim()
+  if (GOAL_LABEL.test(core)) {
+    return `Context: ${context}\n${core}${closing}`
+  }
+  if (CONTEXT_LABEL.test(first) && body) {
+    return `${first}\nGoal: ${body}${closing}`
+  }
+  return `Context: ${context}\nGoal: ${core}${closing}`
+}
+
+// The finished output: the template lines first, then the fixed Observation line in Portuguese.
+const finish = (text: string, language: string) => withClosing(withTemplate(text, language), language)
+
 // The rewrite without its closing line.
 function withoutClosing(text: string) {
   const closing = closingLine(text)
@@ -389,7 +422,7 @@ async function rewrite($: EngineInterface, text: string) {
       }
       better = checked
     }
-    return withClosing(better, language)
+    return finish(better, language)
   } finally {
     $.ui.status(undefined)
   }
@@ -414,7 +447,7 @@ async function fallback($: EngineInterface, text: string, why: string, language:
   $.ui.status('✦ Prompt Master: fixing spelling…')
   const fixed = await correct($, text, context)
   $.ui.toast(`Prompt Master: ${why}, so ${fixed ? 'only the spelling and grammar were fixed' : 'the prompt was sent as typed'}`)
-  return withClosing(fixed, language)
+  return finish(fixed, language)
 }
 
 // The rewrite of any text, short or long; '' when the plugin is off or there is no text.
