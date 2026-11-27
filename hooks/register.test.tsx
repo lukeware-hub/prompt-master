@@ -244,70 +244,52 @@ test('the footer keeps what is drawn beneath and adds the toggle', async ($, on)
   await ui.unmount()
 })
 
-test('on the desktop the toggle is the first thing in the footer', async ($, on) => {
+test('on the desktop every footer button goes into a grid of three columns, the toggle first', async ($, on) => {
+  on('ui.render', ($, e) => {
+    const { Box, Button } = $.ui.resolve(e)
+    return (
+      <Box>
+        <Button key="bug" label="Bug Fix: off" onPress={() => {}} />
+        <Button key="voice" label="luke-voice: on" onPress={() => {}} />
+        <Button key="image" label="Image Inspect: off" onPress={() => {}} />
+      </Box>
+    )
+  })
+
+  const ui = await $.ui.mount({ ...FOOTER, surface: 'desktop' })
+  const buttons = (await ui.findAll({ type: 'Button' })).map(item => item.key)
+  const rows = (await ui.findAll({ type: 'Box' })).filter(item => String(item.key).startsWith('prompt-master-row-'))
+
+  expect(buttons).toEqual(['prompt-master-toggle', 'bug', 'voice', 'image'])
+  expect(rows.map(row => row.key)).toEqual(['prompt-master-row-0', 'prompt-master-row-1'])
+  await ui.unmount()
+})
+
+test('the grid keeps the engine text and its own buttons work', async ($, on) => {
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
     return <Text>engine</Text>
   })
 
   const ui = await $.ui.mount({ ...FOOTER, surface: 'desktop' })
-  const all = await ui.findAll({})
-  const at = (match: (item: any) => boolean) => all.findIndex(match)
-  const button = at(item => item.key === 'prompt-master-toggle')
-  const engine = at(item => item.text === 'engine')
-
-  expect(button).toBeGreaterThanOrEqual(0)
-  expect(engine).toBeGreaterThanOrEqual(0)
-  expect(button).toBeLessThan(engine)
-  await ui.unmount()
-})
-
-test('there is no row above the prompt on any surface', async ($, on) => {
-  on('ui.render', ($, e) => {
-    const { Text } = $.ui.resolve(e)
-    return <Text>engine</Text>
-  })
-
-  for (const surface of ['terminal', 'desktop'] as const) {
-    const band = await $.ui.mount({
-      plugin: 'prompt-master',
-      component: 'AbovePrompt',
-      props: { hasSurvey: false, isCollapsed: false },
-      surface,
-    } as any)
-    expect(await band.find({ type: 'Button', key: 'prompt-master-toggle' })).toBeUndefined()
-    await band.unmount()
-  }
-})
-
-test('on the desktop the widget opens at session start and holds the full toggle', async ($, on) => {
-  const opened: unknown[] = []
-  on('ui.open', (_$, e) => {
-    opened.push(e)
-    return { value: { isPlaced: true } }
-  })
-  mock.store(on, {})
-  engine(on)
-
-  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
-  expect(opened).toEqual([expect.objectContaining({ id: 'prompt-master-widget', placement: 'widget' })])
-
-  const ui = await $.ui.mount({ plugin: 'prompt-master', component: 'Pane', requestId: 'prompt-master-widget', props: {}, surface: 'desktop' } as any)
+  expect((await ui.find({ type: 'Text', text: /engine/ }))?.text).toBe('engine')
   expect((await ui.find({ type: 'Button', key: 'prompt-master-toggle' }))?.props.label).toBe('✦ Prompt Master: on')
   await ui.unmount()
 })
 
-test('the terminal opens no widget', async ($, on) => {
-  const opened: unknown[] = []
-  on('ui.open', (_$, e) => {
-    opened.push(e)
-    return { value: { isPlaced: true } }
+test('the terminal footer keeps the toggle after the other buttons', async ($, on) => {
+  on('ui.render', ($, e) => {
+    const { Box, Button } = $.ui.resolve(e)
+    return (
+      <Box>
+        <Button key="bug" label="Bug Fix: off" onPress={() => {}} />
+      </Box>
+    )
   })
-  mock.store(on, {})
-  engine(on)
 
-  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  expect(opened).toEqual([])
+  const ui = await $.ui.mount({ ...FOOTER, surface: 'terminal' })
+  expect((await ui.findAll({ type: 'Button' })).map(item => item.key)).toEqual(['bug', 'prompt-master-toggle'])
+  await ui.unmount()
 })
 
 // Another mod's footer Button keyed "toggle" took this one's clicks.
