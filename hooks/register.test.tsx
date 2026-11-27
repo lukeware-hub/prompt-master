@@ -1309,3 +1309,30 @@ test('a closing line with the Observation label is replaced, not doubled, whatev
 
   expect(sent).toEqual([`${PLAIN_PT}\nGoal: Revise o \`utils.ts\`.\n${OBSERVATION}`])
 })
+
+test('a short answer to a question that falls back to the spelling fix says it answers the question', async ($, on) => {
+  const question = [said('assistant', 'Quer que eu siga com a release 0.9.30?')]
+  const { sent } = engine(on, undefined, { language: 'pt-BR' }, question, true, 'Sim, prosseguir.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'sim prosseguir' })
+
+  expect(sent).toEqual([`Context: O usuário responde à pergunta do assistente.\nGoal: Sim, prosseguir.\n${OBSERVATION}`])
+})
+
+test('a short draft after a reply with no question keeps the plain Context in the spelling fix', async ($, on) => {
+  const { sent } = engine(on, undefined, { language: 'pt-BR' }, SESSION, true, 'Pode testar.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'pode testar' })
+
+  expect(sent).toEqual([`${PLAIN_PT}\nGoal: Pode testar.\n${OBSERVATION}`])
+})
+
+test('a long draft after a question keeps the plain Context in the spelling fix', async ($, on) => {
+  const question = [said('assistant', 'Quer que eu siga?')]
+  const long = 'Sim, mas antes revise o arquivo de testes, rode a suíte inteira e me diga o resultado completo.'
+  const { sent } = engine(on, undefined, { language: 'pt-BR' }, question, true, long)
+
+  await $.prompt.submit({ ...PROMPT, text: long })
+
+  expect(sent).toEqual([`${PLAIN_PT}\nGoal: ${long}\n${OBSERVATION}`])
+})

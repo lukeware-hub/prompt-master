@@ -271,9 +271,16 @@ const GOAL_LABEL = /^[^\S\n]*(?:[#>-]+[^\S\n]*)?\**Goal\**[^\S\n]*:/im
 const PLAIN_CONTEXT_PT = 'Texto do usuário com a escrita corrigida.'
 const PLAIN_CONTEXT = "The user's own text with its writing fixed."
 
+// What Context says when a short draft in the spelling-only fallback answers a question the assistant asked.
+const ANSWER_CONTEXT_PT = 'O usuário responde à pergunta do assistente.'
+const ANSWER_CONTEXT = "The user answers the assistant's question."
+
+// Whether the last reply ends by asking the user something: its last line has a question mark.
+const asksQuestion = (session: string) => (session.trimEnd().split('\n').at(-1) ?? '').includes('?')
+
 // Every output has the Context and Goal lines. A text that came without them (a model reply with no labels, or the
 // spelling-only fallback) gets them here, in code, so the template never depends on the model: the text becomes the Goal.
-function withTemplate(text: string, language: string) {
+function withTemplate(text: string, language: string, isAnswer = false) {
   const bare = withoutClosing(text)
   const core = bare.trim()
   if (!core || (CONTEXT_LABEL.test(core) && GOAL_LABEL.test(core))) {
@@ -281,7 +288,9 @@ function withTemplate(text: string, language: string) {
   }
   // The model's own closing line stays where it was.
   const closing = text.trimEnd().slice(bare.trimEnd().length)
-  const context = isPortuguese(language) ? PLAIN_CONTEXT_PT : PLAIN_CONTEXT
+  const context = isAnswer
+    ? isPortuguese(language) ? ANSWER_CONTEXT_PT : ANSWER_CONTEXT
+    : isPortuguese(language) ? PLAIN_CONTEXT_PT : PLAIN_CONTEXT
   const [first = '', ...rest] = core.split('\n')
   const body = rest.join('\n').trim()
   if (GOAL_LABEL.test(core)) {
@@ -294,7 +303,7 @@ function withTemplate(text: string, language: string) {
 }
 
 // The finished output: the template lines first, then the fixed Observation line in Portuguese.
-const finish = (text: string, language: string) => withClosing(withTemplate(text, language), language)
+const finish = (text: string, language: string, isAnswer = false) => withClosing(withTemplate(text, language, isAnswer), language)
 
 // The rewrite without its closing line.
 // A last line with the Observation label is the closing too, even when the model worded it so that closingLine misses it.
@@ -459,7 +468,8 @@ async function fallback($: EngineInterface, text: string, why: string, language:
   $.ui.status('✦ Prompt Master: fixing spelling…')
   const fixed = await correct($, text, context)
   $.ui.toast(`Prompt Master: ${why}, so ${fixed ? 'only the spelling and grammar were fixed' : 'the prompt was sent as typed'}`)
-  return finish(fixed, language)
+  // A short draft after a question is an answer to it, so its Context says so.
+  return finish(fixed, language, wordsOf(text).length <= SHORT_DRAFT_WORDS && asksQuestion(context))
 }
 
 // The rewrite of any text, short or long; '' when the plugin is off or there is no text.
