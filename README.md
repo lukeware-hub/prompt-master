@@ -26,7 +26,7 @@ The rewritten prompt follows four parts: goal, context, constraints and expected
 ## Where the button is
 
 - Terminal: the `✦ Prompt Master` button is in the prompt footer, at the right, next to the model.
-- Claude Code Desktop: the button has a row of its own above the prompt box, with its full name, and it is also the first button of the footer, which shows only one mod button and folds the others into `...`. A mod can only draw its own buttons, so the other mods' buttons stay in the footer.
+- Claude Code Desktop: the button has a row of its own above the prompt box, with its full name. The Desktop footer shows only one mod button and folds the others into `...`, so the button is not in the footer there.
 - Claude Desktop has other screens, **Chat** and **Cowork**, that do not run Claude Code plugins, so the plugin does not appear there. Open a session on the **Code** tab to use it.
 
 ## Install
