@@ -1178,6 +1178,26 @@ test('an SDK prompt on the terminal surface only is sent as typed', async ($, on
   expect(sent).toEqual([PROMPT.text])
 })
 
+test('a prompt from the luke-voice plugin is rewritten, on the terminal too', async ($, on) => {
+  on('session.surfaces', () => ({ value: ['terminal'] }))
+  const { sent } = engine(on)
+
+  await $.prompt.submit({ ...PROMPT, origin: { kind: 'plugin', name: 'luke-voice' } })
+
+  expect(sent).toEqual([`${PLAIN}
+Goal: fix the login bug in auth.ts.`])
+})
+
+test('a prompt from any other plugin is sent as typed', async ($, on) => {
+  on('session.surfaces', () => ({ value: ['desktop'] }))
+  const { sent, asked } = engine(on)
+
+  await $.prompt.submit({ ...PROMPT, origin: { kind: 'plugin', name: 'other-mod' } })
+
+  expect(asked).toEqual([])
+  expect(sent).toEqual([PROMPT.text])
+})
+
 test('a scheduled or task prompt on an app surface is never rewritten', async ($, on) => {
   on('session.surfaces', () => ({ value: ['desktop'] }))
   const { sent, asked } = engine(on)
