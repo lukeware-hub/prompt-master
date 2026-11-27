@@ -299,7 +299,7 @@ test('the toggle in the row above the prompt turns rewriting off and on', async 
   await band.unmount()
 })
 
-const MODE_COMMANDS = ['bug-fix-mode', 'image-inspect', 'luke-voice'].map(name => ({ name, description: '', source: 'plugin' }))
+const MODE_COMMANDS = ['bug-fix-mode', 'image-inspect', 'luke-voice'].map(name => ({ name, description: '', source: 'plugin' as const }))
 
 test('the bar above the prompt shows every installed mode side by side, Prompt Master second', async ($, on) => {
   on('ui.render', ($, e) => {
