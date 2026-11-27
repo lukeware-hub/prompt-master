@@ -165,6 +165,31 @@ If the rewrite passes, return it exactly as it is. If not, return the rewrite co
 
 Output only the final text: no preface, no explanation, no quotes, no code fences, no <draft>, <rewrite> or <session> tags around it.`
 
+// The desktop footer shows one mod button and folds the rest into "...", so there the buttons every mod drew
+// are taken out of the tree and laid out again in a grid, GRID_COLUMNS to a row.
+const GRID_COLUMNS = 3
+
+type Node = { type?: string; children?: unknown[] } & Record<string, any>
+
+function isNode(value: unknown): value is Node {
+  return typeof value === 'object' && value !== null
+}
+
+function buttonsIn(node: unknown): Node[] {
+  if (!isNode(node)) return []
+  if (node.type === 'Button') return [node]
+  return Array.isArray(node.children) ? node.children.flatMap(buttonsIn) : []
+}
+
+function withoutButtons(node: unknown): unknown {
+  if (!isNode(node) || node.type === 'Button' || !Array.isArray(node.children)) return node
+  return { ...node, children: node.children.filter(child => !(isNode(child) && child.type === 'Button')).map(withoutButtons) }
+}
+
+function rowsOf<T>(items: T[]): T[][] {
+  return Array.from({ length: Math.ceil(items.length / GRID_COLUMNS) }, (_, i) => items.slice(i * GRID_COLUMNS, (i + 1) * GRID_COLUMNS))
+}
+
 async function toggle($: EngineInterface) {
   await update($, isOn, v => !v)
   const active = await read($, isOn)
@@ -436,12 +461,6 @@ export const register: Register = on => {
       }
     } catch {}
     await $.command.register({ name: 'prompt-master', description: 'Turn prompt rewriting on or off' })
-    // The desktop footer shows only one mod button, so there the toggle also lives in a small widget.
-    if (e.surface === 'desktop') {
-      try {
-        await $.ui.open({ id: 'prompt-master-widget', title: 'Prompt Master', placement: 'widget' })
-      } catch {}
-    }
     return next(e)
   }).catch(($, e, next) => next(e))
 
@@ -449,52 +468,43 @@ export const register: Register = on => {
     text: `Prompt Master: ${(await toggle($)) ? 'on' : 'off'}`,
   }))
 
-  // The widget: the full toggle, always visible at the corner of the chat on the desktop.
-  on('ui.render', { component: 'Pane', requestId: 'prompt-master-widget' }, async ($, e) => {
-    const { Box, Button } = $.ui.resolve(e)
-    const active = await read($, isOn)
-
-    return (
-      <Box>
-        <Button
-          key="prompt-master-toggle"
-          label={active ? '✦ Prompt Master: on' : '✦ Prompt Master: off'}
-          variant={active ? 'primary' : 'secondary'}
-          onPress={() => toggle($)}
-        />
-      </Box>
-    )
-  })
-
-  // Footer row. The desktop footer shows only its first button and folds the rest into "...",
-  // so there the toggle goes first; on the terminal it follows what the engine and other mods draw.
+  // Footer row. On the terminal the toggle follows what the engine and other mods draw. On the desktop every
+  // button in the footer, the other mods' too, goes into a grid of three columns, the toggle first.
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     const { Box, Button } = $.ui.resolve(e)
     const active = await read($, isOn)
+    const below = await next(e)
 
-    if (e.surface === 'desktop') {
+    if (e.surface !== 'desktop') {
       return (
         <Box>
+          {below}
           <Button
-          key="prompt-master-toggle"
-          label={active ? '✦ Prompt Master: on' : '✦ Prompt Master: off'}
-          variant={active ? 'primary' : 'secondary'}
-          onPress={() => toggle($)}
-        />
-          {await next(e)}
+            key="prompt-master-toggle"
+            label={active ? '✦ Prompt Master: on' : '✦ Prompt Master: off'}
+            variant={active ? 'primary' : 'secondary'}
+            onPress={() => toggle($)}
+          />
         </Box>
       )
     }
 
+    const own = (
+      <Button
+        key="prompt-master-toggle"
+        label={active ? '✦ Prompt Master: on' : '✦ Prompt Master: off'}
+        variant={active ? 'primary' : 'secondary'}
+        onPress={() => toggle($)}
+      />
+    )
+    const rows = rowsOf([own, ...buttonsIn(below)])
+
     return (
-      <Box>
-        {await next(e)}
-        <Button
-          key="prompt-master-toggle"
-          label={active ? '✦ Prompt Master: on' : '✦ Prompt Master: off'}
-          variant={active ? 'primary' : 'secondary'}
-          onPress={() => toggle($)}
-        />
+      <Box flexDirection="column">
+        {withoutButtons(below)}
+        {rows.map((row, i) => (
+          <Box key={`prompt-master-row-${i}`}>{row}</Box>
+        ))}
       </Box>
     )
   })
