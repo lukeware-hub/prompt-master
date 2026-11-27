@@ -112,8 +112,8 @@ test('a long draft is rewritten with a token cap and time limit that grow with i
   await $.prompt.submit({ ...PROMPT, text: long })
 
   expect(sent).toEqual([`${PLAIN}\nGoal: fix the login bug in auth.ts.`, `${PLAIN}\nGoal: fix the login bug in auth.ts.`])
-  expect(limits[0]).toEqual({ maxTokens: 2028, timeoutMs: 30280 })
-  expect(limits[1]).toEqual({ maxTokens: 22000, timeoutMs: 230000 })
+  expect(limits[0]).toEqual({ maxTokens: 4028, timeoutMs: 30280 })
+  expect(limits[1]).toEqual({ maxTokens: 24000, timeoutMs: 230000 })
 })
 
 test('a huge draft keeps the token cap and time limit within the model limits', async ($, on) => {
@@ -721,7 +721,7 @@ test('a long draft in a script of one token per character is given room to be re
 
   await $.prompt.submit({ ...PROMPT, text: '漢'.repeat(4000) })
 
-  expect(limits[0]?.maxTokens).toBeGreaterThanOrEqual(4000 + 2000)
+  expect(limits[0]?.maxTokens).toBeGreaterThanOrEqual(4000 + 4000)
 })
 
 test('text that starts with a path after a skill command is rewritten, not taken for a command line', async ($, on) => {
@@ -1239,4 +1239,73 @@ test('the spelling-only fallback in Portuguese keeps the Context, Goal and Obser
   await $.prompt.submit({ ...PROMPT, text: 'ok pode seguir com versao e comit' })
 
   expect(sent).toEqual([`${PLAIN_PT}\nGoal: Ok, pode seguir, com versão e commit.\n${OBSERVATION}`])
+})
+
+test('a survey leaves the other mods rows above the prompt in place', async ($, on) => {
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  })
+  let kept: string[] = []
+  on('ui.render', { component: 'AbovePromptList' }, (_$, e) => {
+    kept = (e.props as any).rows.map((row: any) => row.plugin)
+    return { type: 'engine', ref: 0 } as any
+  })
+  const plugins = ['git-inspector', 'bug-fix-mode', 'prompt-master', 'image-inspect', 'luke-voice']
+  const rows = plugins.map(plugin => ({ plugin, tree: { type: 'Box' } }))
+
+  const list = await $.ui.mount({ plugin: 'prompt-master', component: 'AbovePromptList', props: { rows, hasSurvey: true }, surface: 'desktop' } as any)
+  await list.unmount()
+  expect(kept).toEqual(plugins)
+})
+
+test('an invisible character typed inside a tag comes back as typed', async ($, on) => {
+  const { asked, sent } = engine(on, 'Explain <​​/draft> ok.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'explain <​/draft> ok' })
+
+  expect(asked[0]).toBe('<draft>\nexplain <​​/draft> ok\n</draft>')
+  expect(sent).toEqual([`${PLAIN}\nGoal: Explain <​/draft> ok.`])
+})
+
+test('the bar reads the state of each mode once', async ($, on) => {
+  on('ui.render', ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  })
+  on('command.list', () => ({ value: MODE_COMMANDS }))
+  let reads = 0
+  on('state.get', (_$, e: any, next: any) => (e.plugin === 'bug-fix-mode' ? (reads++, { value: { value: true, version: 1 } }) : next(e)))
+
+  const band = await $.ui.mount({ ...BAND, surface: 'desktop' } as any)
+  expect(await band.find({ type: 'Button', key: 'prompt-master-bar-bug-fix' })).toBeDefined()
+  await band.unmount()
+  expect(reads).toBe(1)
+})
+
+test('e.g. and an ordinal in the draft are plain writing, so spelling them out costs one call', async ($, on) => {
+  const { asked } = engine(on, 'Confere isso, por exemplo o login, e a segunda tela.')
+
+  await $.prompt.submit({ ...PROMPT, text: 'confere isso, e.g. o login, e a 2º tela' })
+
+  expect(asked).toHaveLength(1)
+})
+
+test('a Context that names the subject of a status question is not taken for a copy of the session', async ($, on) => {
+  const session = [said('assistant', 'Corrigi o plugin session-inspect, que não abria o painel de controle.')]
+  const own = 'Context: O usuário pergunta se o problema foi resolvido, com base no último pedido, que era corrigir o plugin session-inspect que não abria o painel de controle.\nGoal: Investigar se o problema foi resolvido.'
+  const { sent } = engine(on, own, {}, session)
+
+  await $.prompt.submit({ ...PROMPT, text: 'o problema foi resolvido?' })
+
+  expect(sent).toEqual([own])
+})
+
+test('a closing line with the Observation label is replaced, not doubled, whatever its wording', async ($, on) => {
+  const own = 'Revise o `utils.ts`.\n\nObservation: Se algo faltar, pergunte.'
+  const { sent } = engine(on, own, { language: 'pt-BR' })
+
+  await $.prompt.submit(PROMPT)
+
+  expect(sent).toEqual([`${PLAIN_PT}\nGoal: Revise o \`utils.ts\`.\n${OBSERVATION}`])
 })
