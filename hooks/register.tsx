@@ -492,6 +492,10 @@ function isCommandLine(line: string, names: Set<string>) {
 // draws on an app surface: a `claude -p` run draws nowhere, and a scheduled or peer prompt has its own kind.
 const APP_ORIGINS = ['sdk', 'bridge', 'unclassified']
 
+// luke-voice, the voice assistant, submits what the user says out loud as a plugin prompt. It is the user's
+// own words, so it is rewritten too. Only that plugin: any other plugin's prompt is left as it is.
+const isLukeVoice = (origin: { kind: string; name?: string }) => origin.kind === 'plugin' && origin.name === 'luke-voice'
+
 async function isUserSend($: EngineInterface, origin: { kind: string }) {
   if (origin.kind === 'composer') {
     return true
@@ -522,7 +526,7 @@ function remember(typed: string, sent: string) {
 export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     // A command's text is rewritten at command.run, where its arguments can still change.
-    if (e.command || e.isMeta || !(await isUserSend($, e.origin))) {
+    if (e.command || e.isMeta || !(isLukeVoice(e.origin) || (await isUserSend($, e.origin)))) {
       return next(e)
     }
 
