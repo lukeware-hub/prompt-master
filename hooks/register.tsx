@@ -424,6 +424,19 @@ async function isUserSend($: EngineInterface, origin: { kind: string }) {
   }
 }
 
+// What the user typed, and the rewrite that was sent in its place. The desktop app draws the message bubble from
+// what was typed, so its bubble is swapped for the rewrite at render time. Only the last few are kept.
+const MAX_REMEMBERED = 20
+const rewrites = new Map<string, string>()
+
+function remember(typed: string, sent: string) {
+  rewrites.delete(typed)
+  rewrites.set(typed, sent)
+  while (rewrites.size > MAX_REMEMBERED) {
+    rewrites.delete(rewrites.keys().next().value as string)
+  }
+}
+
 export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     // A command's text is rewritten at command.run, where its arguments can still change.
@@ -433,7 +446,16 @@ export const register: Register = on => {
 
     // On any failure, send the original prompt untouched.
     const better = await improve($, e.text)
+    if (better) {
+      remember(e.text, better)
+    }
     return next(better ? { ...e, text: better } : e)
+  }).catch(($, e, next) => next(e))
+
+  // Desktop: the bubble shows what the model received, as the terminal does, not the draft as typed.
+  on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
+    const sent = e.surface === 'desktop' ? rewrites.get(e.props.text) : undefined
+    return next(sent ? { ...e, props: { ...e.props, text: sent } } : e)
   }).catch(($, e, next) => next(e))
 
   // Text after a skill or plugin command, below its own leading command lines.

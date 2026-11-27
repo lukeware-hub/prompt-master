@@ -376,6 +376,27 @@ test("on the desktop the other mods' own rows above the prompt are hidden", asyn
   expect(kept).toEqual(['git-inspector', 'prompt-master'])
 })
 
+test('on the desktop the message bubble shows the rewrite that was sent, not the draft as typed', async ($, on) => {
+  engine(on)
+  let shown = ''
+  let shownOnTerminal = ''
+  on('ui.render', { component: 'UserMessage' }, (_$, e) => {
+    if (e.surface === 'desktop') shown = (e.props as any).text
+    else shownOnTerminal = (e.props as any).text
+    return { type: 'engine', ref: 0 } as any
+  })
+  await $.prompt.submit(PROMPT)
+
+  const props = { text: PROMPT.text, origin: PROMPT.origin, isExpanded: true }
+  const desktop = await $.ui.mount({ plugin: 'prompt-master', component: 'UserMessage', props, surface: 'desktop' } as any)
+  await desktop.unmount()
+  const terminal = await $.ui.mount({ plugin: 'prompt-master', component: 'UserMessage', props, surface: 'terminal' } as any)
+  await terminal.unmount()
+
+  expect(shown).toBe('Goal: fix the login bug in auth.ts.')
+  expect(shownOnTerminal).toBe(PROMPT.text)
+})
+
 test('the terminal footer keeps the toggle after the other buttons', async ($, on) => {
   on('ui.render', ($, e) => {
     const { Box, Button } = $.ui.resolve(e)
