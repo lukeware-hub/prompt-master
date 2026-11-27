@@ -443,25 +443,12 @@ export const register: Register = on => {
     text: `Prompt Master: ${(await toggle($)) ? 'on' : 'off'}`,
   }))
 
-  // Footer row. The desktop footer shows only its first button and folds the rest into "...", so there the toggle
-  // goes first; on the terminal it follows what the engine and other mods draw.
+  // Terminal footer row: what the engine and other mods draw there, then the toggle. On the desktop the footer
+  // shows only one mod button, so there the toggle lives in the row above the prompt instead.
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
+    if (e.surface === 'desktop') return next(e)
     const { Box, Button } = $.ui.resolve(e)
     const active = await read($, isOn)
-
-    if (e.surface === 'desktop') {
-      return (
-        <Box>
-          <Button
-          key="prompt-master-toggle"
-          label={active ? '✦ Prompt Master: on' : '✦ Prompt Master: off'}
-          variant={active ? 'primary' : 'secondary'}
-          onPress={() => toggle($)}
-        />
-          {await next(e)}
-        </Box>
-      )
-    }
 
     return (
       <Box>
@@ -476,7 +463,7 @@ export const register: Register = on => {
     )
   })
 
-  // Desktop: the toggle also gets a row above the prompt, in the band the other mods draw in. A mod may only draw
+  // Desktop: the toggle's row above the prompt, in the band the other mods draw in. A mod may only draw
   // its own buttons, so the other mods' stay in the footer.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.surface !== 'desktop' || e.props.hasSurvey) return next(e)

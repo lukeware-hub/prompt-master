@@ -246,7 +246,7 @@ test('the footer keeps what is drawn beneath and adds the toggle', async ($, on)
 
 const BAND = { plugin: 'prompt-master', component: 'AbovePrompt', props: { hasSurvey: false, isCollapsed: false } } as const
 
-test('on the desktop the toggle is first in the footer and also has a row above the prompt', async ($, on) => {
+test('on the desktop the toggle leaves the footer and has a row above the prompt', async ($, on) => {
   on('ui.render', ($, e) => {
     const { Box, Button } = $.ui.resolve(e)
     return (
@@ -257,7 +257,7 @@ test('on the desktop the toggle is first in the footer and also has a row above 
   })
 
   const footer = await $.ui.mount({ ...FOOTER, surface: 'desktop' })
-  expect((await footer.findAll({ type: 'Button' })).map(item => item.key)).toEqual(['prompt-master-toggle', 'bug'])
+  expect((await footer.findAll({ type: 'Button' })).map(item => item.key)).toEqual(['bug'])
   await footer.unmount()
 
   const band = await $.ui.mount({ ...BAND, surface: 'desktop' } as any)
