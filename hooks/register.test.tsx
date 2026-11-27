@@ -244,38 +244,35 @@ test('the footer keeps what is drawn beneath and adds the toggle', async ($, on)
   await ui.unmount()
 })
 
-test('on the desktop the footer is left alone and the toggle gets a row above the prompt', async ($, on) => {
+test('on the desktop the toggle is the first thing in the footer', async ($, on) => {
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
     return <Text>engine</Text>
   })
 
-  const footer = await $.ui.mount({ ...FOOTER, surface: 'desktop' })
-  expect((await footer.find({ type: 'Text', text: /engine/ }))?.text).toBe('engine')
-  expect(await footer.find({ type: 'Button', key: 'prompt-master-toggle' })).toBeUndefined()
-  await footer.unmount()
+  const ui = await $.ui.mount({ ...FOOTER, surface: 'desktop' })
+  const all = await ui.findAll({})
+  const at = (match: (item: any) => boolean) => all.findIndex(match)
+  const button = at(item => item.key === 'prompt-master-toggle')
+  const engine = at(item => item.text === 'engine')
 
-  const band = await $.ui.mount({
-    plugin: 'prompt-master',
-    component: 'AbovePrompt',
-    props: { hasSurvey: false, isCollapsed: false },
-    surface: 'desktop',
-  } as any)
-  expect(await band.find({ type: 'Button', key: 'prompt-master-toggle' })).toBeDefined()
-  await band.unmount()
+  expect(button).toBeGreaterThanOrEqual(0)
+  expect(engine).toBeGreaterThanOrEqual(0)
+  expect(button).toBeLessThan(engine)
+  await ui.unmount()
 })
 
-test('the row above the prompt is not drawn on the terminal or while a survey holds it', async ($, on) => {
+test('there is no row above the prompt on any surface', async ($, on) => {
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
     return <Text>engine</Text>
   })
 
-  for (const [surface, hasSurvey] of [['terminal', false], ['desktop', true]] as const) {
+  for (const surface of ['terminal', 'desktop'] as const) {
     const band = await $.ui.mount({
       plugin: 'prompt-master',
       component: 'AbovePrompt',
-      props: { hasSurvey, isCollapsed: false },
+      props: { hasSurvey: false, isCollapsed: false },
       surface,
     } as any)
     expect(await band.find({ type: 'Button', key: 'prompt-master-toggle' })).toBeUndefined()
