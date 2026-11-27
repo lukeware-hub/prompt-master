@@ -436,12 +436,35 @@ export const register: Register = on => {
       }
     } catch {}
     await $.command.register({ name: 'prompt-master', description: 'Turn prompt rewriting on or off' })
+    // The desktop footer shows only one mod button, so there the toggle also lives in a small widget.
+    if (e.surface === 'desktop') {
+      try {
+        await $.ui.open({ id: 'prompt-master-widget', title: 'Prompt Master', placement: 'widget' })
+      } catch {}
+    }
     return next(e)
   }).catch(($, e, next) => next(e))
 
   on('command.run', { command: 'prompt-master' }, async $ => ({
     text: `Prompt Master: ${(await toggle($)) ? 'on' : 'off'}`,
   }))
+
+  // The widget: the full toggle, always visible at the corner of the chat on the desktop.
+  on('ui.render', { component: 'Pane', requestId: 'prompt-master-widget' }, async ($, e) => {
+    const { Box, Button } = $.ui.resolve(e)
+    const active = await read($, isOn)
+
+    return (
+      <Box>
+        <Button
+          key="prompt-master-toggle"
+          label={active ? '✦ Prompt Master: on' : '✦ Prompt Master: off'}
+          variant={active ? 'primary' : 'secondary'}
+          onPress={() => toggle($)}
+        />
+      </Box>
+    )
+  })
 
   // Footer row. The desktop footer shows only its first button and folds the rest into "...",
   // so there the toggle goes first; on the terminal it follows what the engine and other mods draw.
